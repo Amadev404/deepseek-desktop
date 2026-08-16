@@ -14,6 +14,7 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 仅监听 `127.0.0.1`，优先使用 3080，端口占用时自动使用随机端口
 - Renderer 不启用 Node.js、不暴露 Electron IPC
 - 关闭窗口时同时停止本地 Harness
+- 安装阶段静默预热官方 Harness 与 Web UI，提前完成首次初始化
 
 桌面壳不会读取或管理 API Key，也不会修改官方 Harness 的 UI、Agent 或 Profile 清单。
 官方 Harness 在首次启动时会自行初始化缺失的 Web Profile，并维护

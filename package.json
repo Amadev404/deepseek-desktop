@@ -85,6 +85,7 @@
       ]
     },
     "nsis": {
+      "include": "installer.nsh",
       "artifactName": "DeepSeek-Desktop-Setup-${version}-${arch}.${ext}",
       "oneClick": false,
       "perMachine": false,

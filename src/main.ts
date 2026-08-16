@@ -7,6 +7,7 @@ import { startHarness, stopHarness, type RunningHarness } from './harness.js'
 import { chooseHarnessPort, isTrustedHarnessUrl } from './runtime.js'
 
 const PRODUCT_NAME = 'DeepSeek Desktop'
+const isPrewarm = process.argv.includes('--prewarm')
 
 let mainWindow: BrowserWindow | undefined
 let harness: RunningHarness | undefined
@@ -25,6 +26,10 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(startDesktop).catch((error: unknown) => {
+    if (isPrewarm) {
+      app.quit()
+      return
+    }
     dialog.showErrorBox('DeepSeek Desktop failed to start', errorMessage(error))
     app.quit()
   })
@@ -47,13 +52,18 @@ async function startDesktop(): Promise<void> {
     cliPath,
     cwd,
     dshHome: process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'),
-    port: await chooseHarnessPort()
+    port: await chooseHarnessPort(),
+    startupTimeoutMs: isPrewarm ? 180_000 : 120_000
   })
 
   const running = harness
   running.child.once('exit', (code, signal) => {
     if (stopping || harness !== running) return
     harness = undefined
+    if (isPrewarm) {
+      app.quit()
+      return
+    }
     const detail = signal ? `signal ${signal}` : `exit code ${code ?? -1}`
     const output = running.stderrLines.length ? `\n\n${running.stderrLines.join('\n')}` : ''
     dialog.showErrorBox('DeepSeek Harness stopped', `The local Harness process stopped unexpectedly (${detail}).${output}`)
@@ -62,6 +72,11 @@ async function startDesktop(): Promise<void> {
 
   mainWindow = createWindow(running.url)
   await mainWindow.loadURL(running.url)
+  if (isPrewarm) {
+    await delay(2_000)
+    app.quit()
+    return
+  }
   mainWindow.show()
 }
 
@@ -104,6 +119,10 @@ function createWindow(harnessUrl: string): BrowserWindow {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.stack ?? error.message : String(error)
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms))
 }
 
 app.on('window-all-closed', () => app.quit())
