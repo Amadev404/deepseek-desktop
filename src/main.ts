@@ -2,7 +2,8 @@ import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { app, BrowserWindow, dialog, Menu, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
+import { ensureCompanionLink } from './companion-link.js'
 import { startHarness, stopHarness, type RunningHarness } from './harness.js'
 import { chooseHarnessPort, isTrustedHarnessUrl } from './runtime.js'
 
@@ -18,6 +19,10 @@ app.setName(PRODUCT_NAME)
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  ipcMain.on('deepseek-desktop:quit', (event) => {
+    if (event.sender === mainWindow?.webContents) app.quit()
+  })
+
   app.on('second-instance', () => {
     if (!mainWindow) return
     if (mainWindow.isMinimized()) mainWindow.restore()
@@ -41,17 +46,26 @@ async function startDesktop(): Promise<void> {
   const appPath = app.getAppPath()
   const nodePath = join(appPath, 'node_modules', 'node', 'bin', 'node.exe')
   const cliPath = join(appPath, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  const patchPath = join(appPath, 'build', 'desktop.patch.yml')
+  const preloadPath = join(appPath, 'out', 'preload.cjs')
+  const companionDir = join(appPath, 'node_modules', '@deepseek-desktop', 'companion')
   if (!existsSync(nodePath)) throw new Error(`Bundled Node.js runtime is missing:\n${nodePath}`)
   if (!existsSync(cliPath)) throw new Error(`Bundled DeepSeek Harness entry is missing:\n${cliPath}`)
+  if (!existsSync(patchPath)) throw new Error(`DeepSeek Desktop Harness overlay is missing:\n${patchPath}`)
+  if (!existsSync(preloadPath)) throw new Error(`DeepSeek Desktop preload is missing:\n${preloadPath}`)
+  if (!existsSync(companionDir)) throw new Error(`DeepSeek Desktop Companion is missing:\n${companionDir}`)
 
   const cwd = join(app.getPath('userData'), 'launch-root')
+  const dshHome = process.env.DSH_HOME?.trim() || join(homedir(), '.dsh')
   await mkdir(cwd, { recursive: true })
+  await ensureCompanionLink(dshHome, companionDir)
 
   harness = await startHarness({
     nodePath,
     cliPath,
+    patchPath,
     cwd,
-    dshHome: process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'),
+    dshHome,
     port: await chooseHarnessPort(),
     startupTimeoutMs: isPrewarm ? 180_000 : 120_000
   })
@@ -70,7 +84,7 @@ async function startDesktop(): Promise<void> {
     app.quit()
   })
 
-  mainWindow = createWindow(running.url)
+  mainWindow = createWindow(running.url, preloadPath)
   await mainWindow.loadURL(running.url)
   if (isPrewarm) {
     await delay(2_000)
@@ -80,7 +94,7 @@ async function startDesktop(): Promise<void> {
   mainWindow.show()
 }
 
-function createWindow(harnessUrl: string): BrowserWindow {
+function createWindow(harnessUrl: string, preloadPath: string): BrowserWindow {
   const window = new BrowserWindow({
     title: PRODUCT_NAME,
     width: 1440,
@@ -94,7 +108,8 @@ function createWindow(harnessUrl: string): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      webSecurity: true
+      webSecurity: true,
+      preload: preloadPath
     }
   })
 

@@ -1,0 +1,5 @@
+# DeepSeek Desktop runtime overlay. It is passed through dsh --patch and never
+# writes to the user's Web Profile or settings document.
+- insert:
+    - id: deepseek-desktop-companion
+      name: '@deepseek-desktop/companion'

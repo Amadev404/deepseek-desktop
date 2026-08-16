@@ -11,6 +11,7 @@ import { parseHarnessUrl } from './runtime.js'
 export interface HarnessOptions {
   nodePath: string
   cliPath: string
+  patchPath?: string
   cwd: string
   dshHome: string
   port: number
@@ -47,16 +48,13 @@ function keepLast(lines: string[], line: string, limit = 40): void {
 }
 
 export async function startHarness(options: HarnessOptions): Promise<RunningHarness> {
+  const args = [options.cliPath, 'web']
+  if (options.patchPath) args.push('--patch', options.patchPath)
+  args.push('--host', '127.0.0.1', '--port', String(options.port))
+
   const child = spawn(
     options.nodePath,
-    [
-      options.cliPath,
-      'web',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(options.port)
-    ],
+    args,
     spawnOptions(options)
   )
 

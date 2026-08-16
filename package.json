@@ -1,6 +1,6 @@
 {
   "name": "deepseek-desktop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "An unofficial Windows desktop shell for DeepSeek Harness.",
   "author": "DeepSeek Desktop contributors",
@@ -11,11 +11,13 @@
     "node": "24.11.0"
   },
   "scripts": {
-    "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "node -e \"const fs=require('node:fs');for(const p of ['out','packages/companion/lib'])fs.rmSync(p,{recursive:true,force:true})\"",
+    "build:assets": "node scripts/build-assets.mjs",
+    "build": "npm run clean && tsc -p tsconfig.json && npm run build:assets",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p packages/companion/tsconfig.json",
     "test": "vitest run",
     "smoke:harness": "node scripts/smoke-harness.mjs",
+    "smoke:desktop": "node scripts/smoke-desktop.mjs",
     "start": "npm run build && electron .",
     "package:dir": "npm run build && electron-builder --dir --win --x64 --publish never",
     "dist:win": "npm run build && electron-builder --win --x64 --publish never"
@@ -41,12 +43,16 @@
     "@deepseek-ai/dsh-subprocess": "0.1.0-rc.6",
     "@deepseek-ai/dsh-timeout": "0.1.0-rc.6",
     "@deepseek-ai/dsh-workflow": "0.1.0-rc.6",
+    "@deepseek-desktop/companion": "file:packages/companion",
     "node": "24.11.0"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
+    "@types/react": "18.3.26",
+    "@types/react-dom": "18.3.7",
     "electron": "43.4.0",
     "electron-builder": "26.15.3",
+    "esbuild": "0.28.2",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   },
@@ -67,6 +73,7 @@
     "files": [
       "out/**/*",
       "build/icon.png",
+      "build/desktop.patch.yml",
       "package.json",
       "LICENSE",
       "THIRD_PARTY_NOTICES.md",
