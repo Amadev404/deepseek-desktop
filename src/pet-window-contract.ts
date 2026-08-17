@@ -7,6 +7,9 @@ export const PET_DRAG_MOVE_CHANNEL = 'deepseek-desktop:pet-drag-move'
 export const PET_DRAG_END_CHANNEL = 'deepseek-desktop:pet-drag-end'
 export const PET_ACTIVATE_CHANNEL = 'deepseek-desktop:pet-activate'
 export const PET_OPEN_SESSION_CHANNEL = 'deepseek-desktop:pet-open-session'
+export const PET_STATUS_PLACEMENT_CHANNEL = 'deepseek-desktop:pet-status-placement'
+
+export type PetStatusPlacement = 'above' | 'below' | 'hidden'
 
 export type DesktopPetMode =
   | 'idle'
@@ -44,4 +47,5 @@ export interface PetWindowBridge {
   dragStart(screenX: number, screenY: number): void
   onSnapshot(listener: (snapshot: DesktopPetSnapshot) => void): () => void
   ready(): void
+  setStatusPlacement(placement: PetStatusPlacement): void
 }

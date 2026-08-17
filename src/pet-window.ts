@@ -18,13 +18,16 @@ import {
   PET_READY_CHANNEL,
   PET_RESET_CHANNEL,
   PET_STATE_CHANNEL,
+  PET_STATUS_PLACEMENT_CHANNEL,
   PET_SYNC_CHANNEL,
-  type DesktopPetSnapshot
+  type DesktopPetSnapshot,
+  type PetStatusPlacement
 } from './pet-window-contract.js'
 import {
   clampPetWindowPosition,
   defaultPetWindowPosition,
   petWindowShape,
+  PET_SPRITE_TOP,
   PET_WINDOW_HEIGHT,
   PET_WINDOW_WIDTH,
   type Point
@@ -32,6 +35,8 @@ import {
 
 const DEFAULT_SCALE = 1.15
 const MAX_SPRITESHEET_DATA_URL_LENGTH = 20 * 1024 * 1024
+const PET_POSITION_LAYOUT_VERSION = 2
+const LEGACY_PET_SPRITE_TOP = 26
 
 let petWindow: BrowserWindow | undefined
 let latestSnapshot: DesktopPetSnapshot | undefined
@@ -39,6 +44,7 @@ let savedPosition: Point | undefined
 let drag: { offsetX: number; offsetY: number } | undefined
 let getOwner: (() => WebContents | undefined) | undefined
 let writePosition = Promise.resolve()
+let statusPlacement: PetStatusPlacement = 'hidden'
 
 export function registerPetWindowIpc(owner: () => WebContents | undefined): void {
   getOwner = owner
@@ -57,6 +63,15 @@ export function registerPetWindowIpc(owner: () => WebContents | undefined): void
   ipcMain.on(PET_READY_CHANNEL, (event) => {
     assertPetWindow(event)
     syncWindow()
+  })
+  ipcMain.on(PET_STATUS_PLACEMENT_CHANNEL, (event, value: unknown) => {
+    assertPetWindow(event)
+    if (value !== 'above' && value !== 'below' && value !== 'hidden') {
+      throw new Error('Invalid DeepSeek pet status placement.')
+    }
+    if (value === statusPlacement) return
+    statusPlacement = value
+    updateWindowShape()
   })
   ipcMain.on(PET_DRAG_START_CHANNEL, (event, value: unknown) => {
     assertPetWindow(event)
@@ -137,7 +152,10 @@ export async function openPetWindow(preloadPath: string, htmlPath: string): Prom
   window.webContents.session.setPermissionCheckHandler(() => false)
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   window.on('closed', () => {
-    if (petWindow === window) petWindow = undefined
+    if (petWindow === window) {
+      petWindow = undefined
+      statusPlacement = 'hidden'
+    }
   })
 
   await window.loadFile(htmlPath)
@@ -152,6 +170,7 @@ export async function openPetWindow(preloadPath: string, htmlPath: string): Prom
 function syncWindow(): void {
   if (!petWindow || petWindow.isDestroyed() || !latestSnapshot) return
   petWindow.webContents.send(PET_STATE_CHANNEL, latestSnapshot)
+  if (!latestSnapshot.enabled) statusPlacement = 'hidden'
   updateWindowShape()
   if (latestSnapshot.enabled) {
     positionWindow(false)
@@ -186,12 +205,12 @@ function repositionForDisplays(): void {
 
 function updateWindowShape(): void {
   if (!petWindow || petWindow.isDestroyed()) return
-  petWindow.setShape(petWindowShape(latestSnapshot?.scale ?? DEFAULT_SCALE))
+  petWindow.setShape(petWindowShape(latestSnapshot?.scale ?? DEFAULT_SCALE, statusPlacement))
 }
 
 function persistPosition(point: Point): void {
   writePosition = writePosition
-    .then(() => writeFile(positionPath(), JSON.stringify(point), 'utf8'))
+    .then(() => writeFile(positionPath(), JSON.stringify({ ...point, layoutVersion: PET_POSITION_LAYOUT_VERSION }), 'utf8'))
     .catch(() => undefined)
 }
 
@@ -199,10 +218,14 @@ async function readPosition(): Promise<Point | undefined> {
   try {
     const value: unknown = JSON.parse(await readFile(positionPath(), 'utf8'))
     if (!value || typeof value !== 'object') return undefined
-    const point = value as Partial<Point>
+    const point = value as Partial<Point> & { layoutVersion?: unknown }
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return undefined
     if (Math.abs(point.x!) > 100_000 || Math.abs(point.y!) > 100_000) return undefined
-    return { x: Math.round(point.x!), y: Math.round(point.y!) }
+    if (point.layoutVersion !== undefined && point.layoutVersion !== PET_POSITION_LAYOUT_VERSION) return undefined
+    return {
+      x: Math.round(point.x!),
+      y: Math.round(point.y! - (point.layoutVersion === undefined ? PET_SPRITE_TOP - LEGACY_PET_SPRITE_TOP : 0))
+    }
   } catch {
     return undefined
   }

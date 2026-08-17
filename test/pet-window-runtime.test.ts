@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  choosePetStatusPlacement,
   clampPetWindowPosition,
   defaultPetWindowPosition,
   petEnvelope,
@@ -43,11 +44,30 @@ describe('desktop pet window geometry', () => {
 
   it('keeps the full action envelope inside the native hit-test shape', () => {
     const envelope = petEnvelope(1.5)
-    const [sprite, status] = petWindowShape(1.5)
+    const [sprite] = petWindowShape(1.5)
     expect(sprite.x).toBeLessThanOrEqual(envelope.x)
     expect(sprite.y).toBeLessThanOrEqual(envelope.y)
     expect(sprite.x + sprite.width).toBeGreaterThanOrEqual(envelope.x + envelope.width)
     expect(sprite.y + sprite.height).toBeGreaterThanOrEqual(envelope.y + envelope.height)
-    expect(status.y + status.height).toBeLessThanOrEqual(PET_WINDOW_HEIGHT)
+    expect(sprite.x).toBeLessThanOrEqual(envelope.x - 17)
+    expect(sprite.y).toBeLessThanOrEqual(envelope.y - 17)
+  })
+
+  it('adds a bounded native region only while the status label is visible', () => {
+    expect(petWindowShape(1.15, 'hidden')).toHaveLength(1)
+    for (const placement of ['above', 'below'] as const) {
+      const [, status] = petWindowShape(1.5, placement)
+      expect(status.x).toBeGreaterThanOrEqual(0)
+      expect(status.y).toBeGreaterThanOrEqual(0)
+      expect(status.x + status.width).toBeLessThanOrEqual(PET_WINDOW_WIDTH)
+      expect(status.y + status.height).toBeLessThanOrEqual(PET_WINDOW_HEIGHT)
+    }
+  })
+
+  it('moves the status label above the pet at the bottom work-area edge', () => {
+    const bottom = clampPetWindowPosition({ x: 0, y: 10_000 }, workArea, 1.15)
+    const top = clampPetWindowPosition({ x: 0, y: -10_000 }, workArea, 1.15)
+    expect(choosePetStatusPlacement(bottom.y, workArea, 1.15)).toBe('above')
+    expect(choosePetStatusPlacement(top.y, workArea, 1.15)).toBe('below')
   })
 })

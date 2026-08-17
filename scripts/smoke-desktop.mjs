@@ -100,9 +100,16 @@ try {
     const petCenter = { x: initialPetRect.x + initialPetRect.width / 2, y: initialPetRect.y + initialPetRect.height / 2 }
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...petCenter })
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-mode') === 'jumping'`, 5_000)
+    const statusBoundary = await petCdp.evaluate(`(() => {
+      const pet = document.querySelector('#pet')?.getBoundingClientRect()
+      const status = document.querySelector('#status')?.getBoundingClientRect()
+      return { placement: document.querySelector('#pet')?.getAttribute('data-status-placement'), petTop: pet?.top, statusBottom: status?.bottom }
+    })()`)
+    assert(statusBoundary.placement === 'above' && statusBoundary.statusBottom <= statusBoundary.petTop, `bottom-edge status did not move above the pet: ${JSON.stringify(statusBoundary)}`)
     assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-looking') === 'false'`), 'built-in DeepSeek pet unexpectedly tracks the global pointer')
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 })
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-status-placement') === 'hidden'`, 5_000)
     assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-row') === '6'`), 'built-in DeepSeek pet did not use the calm idle row')
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...petCenter, button: 'left', buttons: 0, clickCount: 1 })
@@ -134,13 +141,24 @@ try {
     if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
       await captureScreenshot(petCdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'pet-window-dragging'))
     }
+    await petCdp.evaluate(`window.deepseekDesktopPet.dragMove(window.screenX + ${petCenter.x}, window.screen.availTop + ${petCenter.y} + 10)`)
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-status-placement') === 'below'`, 5_000)
+    const topStatusBoundary = await petCdp.evaluate(`(() => {
+      const pet = document.querySelector('#pet')?.getBoundingClientRect()
+      const status = document.querySelector('#status')?.getBoundingClientRect()
+      return { placement: document.querySelector('#pet')?.getAttribute('data-status-placement'), petBottom: pet?.bottom, statusTop: status?.top }
+    })()`)
+    assert(topStatusBoundary.statusTop >= topStatusBoundary.petBottom, `top-edge status did not move below the pet: ${JSON.stringify(topStatusBoundary)}`)
+    if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
+      await captureScreenshot(petCdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'pet-window-top'))
+    }
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dragTarget, button: 'left', buttons: 0, clickCount: 1 })
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-dragging') === 'false'`, 5_000)
     assert(await petCdp.evaluate(`!['running-left', 'running-right'].includes(document.querySelector('#pet')?.getAttribute('data-mode'))`), 'directional running leaked past drag release')
     const movedWindow = await petCdp.evaluate(`({ x: window.screenX, y: window.screenY })`)
     assert(Math.abs(movedWindow.x - initialWindow.x) > 40, `dragging did not move the desktop pet window: ${JSON.stringify({ initialWindow, movedWindow })}`)
     const persistedPosition = await waitForJson(join(electronUserData, 'deepseek-pet-window.json'), 5_000)
-    assert(Math.abs(persistedPosition.x - movedWindow.x) < 3 && Math.abs(persistedPosition.y - movedWindow.y) < 3, `desktop pet position did not persist: ${JSON.stringify({ persistedPosition, movedWindow })}`)
+    assert(Math.abs(persistedPosition.x - movedWindow.x) < 3 && Math.abs(persistedPosition.y - movedWindow.y) < 3 && persistedPosition.layoutVersion === 2, `desktop pet position did not persist: ${JSON.stringify({ persistedPosition, movedWindow })}`)
 
     const triggerCenter = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-trigger')?.getBoundingClientRect(); return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null })()`)
     assert(triggerCenter, 'Desktop account trigger is missing')

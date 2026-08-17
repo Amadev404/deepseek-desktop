@@ -12,8 +12,13 @@ import {
 } from '../../companion/src/pet-runtime.js'
 import type {
   DesktopPetSnapshot,
+  PetStatusPlacement,
   PetWindowBridge
 } from '../../../src/pet-window-contract.js'
+import {
+  choosePetStatusPlacement,
+  PET_SPRITE_TOP
+} from '../../../src/pet-window-runtime.js'
 
 declare global {
   interface Window {
@@ -46,6 +51,7 @@ let lastFrameKey = ''
 let noticeTimer = 0
 let lookTimer = 0
 let lookIndex: number | undefined
+let lastStatusPlacement: PetStatusPlacement = 'hidden'
 
 installStyles()
 
@@ -174,6 +180,7 @@ function render(resetAnimation: boolean): void {
   pet.dataset.mode = currentMode()
   pet.dataset.petId = snapshot.pet.id
   pet.dataset.attention = String(['failed', 'waiting', 'review'].includes(displayedSignal.mode))
+  pet.dataset.statusVisible = String(dragging || hovered || pet.dataset.attention === 'true')
   pet.style.setProperty('--pet-scale', String(snapshot.scale))
   pet.setAttribute('aria-label', `${snapshot.pet.displayName}${currentLabel()}，可拖动`)
   pet.title = `${snapshot.pet.displayName} · ${currentLabel()}`
@@ -183,6 +190,7 @@ function render(resetAnimation: boolean): void {
 
 function renderFrame(now: number): void {
   if (!snapshot) return
+  syncStatusPlacement()
   const mode = currentMode()
   const animated = snapshot.animated && !reducedMotion.matches
   const timeline = petTimeline(mode, dragDirection !== undefined, snapshot.pet.id === DEFAULT_PET_ID ? 'smooth' : 'codex')
@@ -210,6 +218,20 @@ function renderFrame(now: number): void {
   sprite.style.backgroundImage = `url(${snapshot.pet.spritesheetDataUrl})`
   sprite.style.backgroundSize = `${1536 * scale}px ${petAtlasRows(snapshot.pet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`
   sprite.style.backgroundPosition = `${-(column * PET_FRAME_WIDTH * scale)}px ${-(row * PET_FRAME_HEIGHT * scale)}px`
+}
+
+function syncStatusPlacement(): void {
+  const desktopScreen = window.screen as Screen & { availTop: number }
+  const placement: PetStatusPlacement = !snapshot?.enabled || pet.dataset.statusVisible !== 'true'
+      ? 'hidden'
+      : choosePetStatusPlacement(window.screenY, {
+          y: desktopScreen.availTop,
+          height: desktopScreen.availHeight
+        }, snapshot.scale)
+  if (placement === lastStatusPlacement) return
+  lastStatusPlacement = placement
+  pet.dataset.statusPlacement = placement
+  bridge.setStatusPlacement(placement)
 }
 
 function currentMode(): PetMode {
@@ -251,10 +273,11 @@ function installStyles(): void {
   const style = document.createElement('style')
   style.textContent = `
     :root{color-scheme:light dark}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent!important}body{font-family:"Segoe UI",system-ui,sans-serif;user-select:none;pointer-events:none}
-    #pet{--pet-scale:1.15;--pet-offset-x:0px;--pet-width:220.8px;--pet-height:239.2px;position:absolute;top:26px;left:50%;width:var(--pet-width);height:var(--pet-height);padding:0;border:0;outline:0;background:transparent;transform:translateX(calc(-50% + var(--pet-offset-x)));cursor:grab;pointer-events:auto;touch-action:none;filter:drop-shadow(0 8px 12px rgb(0 0 0 / 22%));will-change:transform}
-    #pet[hidden]{display:none}#pet[data-dragging="true"]{cursor:grabbing}#sprite{position:absolute;inset:0;display:block;background-repeat:no-repeat;image-rendering:auto;will-change:background-position}
+    #pet{--pet-scale:1.15;--pet-offset-x:0px;--pet-width:220.8px;--pet-height:239.2px;position:absolute;top:${PET_SPRITE_TOP}px;left:50%;width:var(--pet-width);height:var(--pet-height);padding:0;border:0;outline:0;background:transparent;transform:translateX(calc(-50% + var(--pet-offset-x)));cursor:grab;pointer-events:auto;touch-action:none;will-change:transform}
+    #pet[hidden]{display:none}#pet[data-dragging="true"]{cursor:grabbing}#sprite{position:absolute;inset:0;display:block;background-repeat:no-repeat;image-rendering:auto;filter:drop-shadow(0 8px 12px rgb(0 0 0 / 22%));will-change:background-position}
     #status{position:absolute;left:50%;top:calc(100% + 5px);max-width:230px;overflow:hidden;padding:5px 10px;border:1px solid rgb(127 127 127 / 28%);border-radius:999px;background:rgb(250 250 250 / 91%);color:#4b5563;box-shadow:0 4px 14px rgb(0 0 0 / 13%);font:12px/1.2 "Segoe UI",system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translate(-50%,4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
-    #pet:hover #status,#pet[data-attention="true"] #status{opacity:1;transform:translate(-50%,0)}
+    #pet[data-status-placement="above"] #status{top:auto;bottom:calc(100% + 5px);transform:translate(-50%,-4px)}
+    #pet[data-status-visible="true"] #status{opacity:1;transform:translate(-50%,0)}
     @media(prefers-color-scheme:dark){#status{border-color:rgb(255 255 255 / 18%);background:rgb(32 35 40 / 91%);color:#d1d5db}}
     @media(prefers-reduced-motion:reduce){#status{transition:none}}
   `

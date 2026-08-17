@@ -6,7 +6,9 @@ import {
   PET_DRAG_START_CHANNEL,
   PET_READY_CHANNEL,
   PET_STATE_CHANNEL,
+  PET_STATUS_PLACEMENT_CHANNEL,
   type DesktopPetSnapshot,
+  type PetStatusPlacement,
   type PetWindowBridge
 } from './pet-window-contract.js'
 
@@ -20,7 +22,8 @@ const bridge: PetWindowBridge = Object.freeze({
     ipcRenderer.on(PET_STATE_CHANNEL, handler)
     return () => ipcRenderer.removeListener(PET_STATE_CHANNEL, handler)
   },
-  ready: (): void => ipcRenderer.send(PET_READY_CHANNEL)
+  ready: (): void => ipcRenderer.send(PET_READY_CHANNEL),
+  setStatusPlacement: (placement: PetStatusPlacement): void => ipcRenderer.send(PET_STATUS_PLACEMENT_CHANNEL, placement)
 })
 
 contextBridge.exposeInMainWorld('deepseekDesktopPet', bridge)
