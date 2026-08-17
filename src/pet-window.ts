@@ -90,6 +90,7 @@ export function registerPetWindowIpc(owner: () => WebContents | undefined): void
       y: cursor.y - drag.offsetY
     }, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE)
     petWindow.setPosition(point.x, point.y)
+    updateWindowShape()
     savedPosition = point
   })
   ipcMain.on(PET_DRAG_END_CHANNEL, (event) => {
@@ -159,7 +160,6 @@ export async function openPetWindow(preloadPath: string, htmlPath: string): Prom
   })
 
   await window.loadFile(htmlPath)
-  updateWindowShape()
   positionWindow(savedPosition === undefined)
   syncWindow()
 
@@ -171,11 +171,11 @@ function syncWindow(): void {
   if (!petWindow || petWindow.isDestroyed() || !latestSnapshot) return
   petWindow.webContents.send(PET_STATE_CHANNEL, latestSnapshot)
   if (!latestSnapshot.enabled) statusPlacement = 'hidden'
-  updateWindowShape()
   if (latestSnapshot.enabled) {
     positionWindow(false)
     petWindow.showInactive()
   } else {
+    updateWindowShape()
     petWindow.hide()
   }
 }
@@ -191,6 +191,7 @@ function positionWindow(useDefault: boolean): void {
     : clampPetWindowPosition(current, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE)
   savedPosition = point
   petWindow.setPosition(point.x, point.y)
+  updateWindowShape()
 }
 
 function ownerDisplay(): Electron.Display {
@@ -205,6 +206,7 @@ function repositionForDisplays(): void {
 
 function updateWindowShape(): void {
   if (!petWindow || petWindow.isDestroyed()) return
+  // Reapplying after a cross-display move lets Electron rebuild the native region at the new DPI.
   petWindow.setShape(petWindowShape(latestSnapshot?.scale ?? DEFAULT_SCALE, statusPlacement))
 }
 
