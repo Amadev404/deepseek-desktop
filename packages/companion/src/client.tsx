@@ -16,7 +16,7 @@ import { createPortal } from 'react-dom'
 import type { BalanceResult } from './balance.js'
 import whaleAvatar from '../assets/whale-avatar.png'
 import maidWork from '../assets/maid-work.webp'
-import { PetOverlay, PetSettings, usePetController, type PetUseSessions } from './pet.js'
+import { PetOverlaySync, PetSettings, usePetController, type PetUseSessions } from './pet.js'
 
 export const inject = ['connection', 'sessions', 'slots']
 
@@ -230,7 +230,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   return (
     <>
       {createPortal(<img className="dsd-character" src={maidWork} alt="" aria-hidden="true" />, document.body)}
-      <PetOverlay
+      <PetOverlaySync
         controller={pet}
         hasCurrentError={Boolean(conversation?.lastAgentError || conversation?.promptError)}
         openSession={(id) => sessions.open(id as SessionId)}

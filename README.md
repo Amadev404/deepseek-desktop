@@ -6,13 +6,13 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 > 本项目是独立的社区项目，并非 DeepSeek 官方产品，也未获得 DeepSeek 官方背书。
 > DeepSeek 是 DeepSeek AI 的商标。
 
-## v0.8.0 特性
+## v0.9.0 特性
 
 - 内置官方 `@deepseek-ai/dsh@0.1.0-rc.6` 和 Node.js 24.11.0
 - 使用原生 Windows 窗口显示完整 Harness Web UI
 - 默认复用 `~/.dsh` 中的模型、会话、工作区和插件配置
 - 仅监听 `127.0.0.1`，优先使用 3080，端口占用时自动使用随机端口
-- Renderer 不启用 Node.js，只暴露 `quit()` 和受限的宠物库桥接
+- Harness 与宠物 Renderer 均不启用 Node.js，只暴露各自受限的桌面桥接
 - 关闭窗口时同时停止本地 Harness
 - 安装阶段静默预热官方 Harness 与 Web UI，提前完成首次初始化
 - 通过官方 `--patch` 扩展接口加入 Codex 风格账户上拉框，不修改官方源码
@@ -22,13 +22,17 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 上拉框内可打开 Harness 设置或退出桌面端
 - 保持 Harness 原生配色，在宽屏新会话和对话界面持续显示工作款鲸鱼娘立绘
 - 内置 DeepSeek 宠物，使用 Codex 九状态图集、官方播放节奏和任务完成/失败/待处理提醒
+- 桌宠运行在独立的透明无边框顶层窗口中，可跨出 DeepSeek 主窗口并在多显示器工作区内拖动
+- 透明窗口不显示在任务栏，角色命中区之外点击穿透；与 Codex 桌宠使用不同窗口标题、IPC 和数据目录
 - 内置宠物采用无道具的安静待机帧；悬停只播放短跳，普通点击不额外触发动作
-- 拖动累计超过 4px 才按横向方向播放跑步，松手立即清除跑步状态，位置跨重载保存
+- 拖动累计超过 4px 才按横向方向播放跑步，窗口按屏幕坐标平滑跟随，松手立即清除跑步状态
+- 桌宠位置保存在 `%APPDATA%\DeepSeek Desktop\deepseek-pet-window.json`，不写入 Harness 或 Codex 配置
 - 内置宠物不启用全局鼠标追视；导入的 Codex V2 宠物仍支持 16 方向追视
 - 使用基于 elapsed time 的 `requestAnimationFrame` 播放器，掉帧后自动追上正确帧
 - 拖动事件按显示帧合并并直接更新宠物位置，避免每帧重渲染整个 React 组件
 - 清理内置鲸鱼娘图集各行动帧的残余 Alpha 块，并清空未使用单元格，深色背景下不再出现矩形残片
-- 内置鲸鱼娘按每帧脚底锚点补偿显示位置；静态状态与跑步松手后的待机切换不再横向跳动
+- 动画和窗口位移完全解耦；每个动作行只做一次静态中心对齐，循环末尾不再重置逐帧补偿
+- 独立窗口为最大缩放和左右动作保留对称透明安全区，尾巴与裙摆不会被窗口边缘裁切
 - 内置鲸鱼娘的活动帧以约 12 FPS 更新；导入的 Codex 宠物继续采用其原始 Codex 节奏
 - 已完成的旧会话不会持续占用宠物动作，任务切换会清理失效的交互状态
 - DeepSeek 宠物只在自己的 Renderer、Cookie、桥接和 `%APPDATA%\\DeepSeek Desktop\\pets` 中运行，不创建或覆盖 Codex 宠物窗口
@@ -69,7 +73,7 @@ npm run package:dir
 npm run dist:win
 ```
 
-安装包输出到 `dist/DeepSeek-Desktop-Setup-0.8.0-x64.exe`。当前版本未进行代码签名，
+安装包输出到 `dist/DeepSeek-Desktop-Setup-0.9.0-x64.exe`。当前版本未进行代码签名，
 Windows SmartScreen 可能显示“未知发布者”。
 
 ## 数据目录

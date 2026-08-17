@@ -11,6 +11,7 @@ import {
   type ReactNode
 } from 'react'
 import defaultSpritesheet from '../assets/deepseek-pet.webp'
+import type { DesktopPetSnapshot } from '../../../src/pet-window-contract.js'
 import {
   clampPetPosition,
   defaultPetFrameOffset,
@@ -58,6 +59,12 @@ interface PetStoreApi {
   list(): Promise<PetRecord[]>
   save(record: PetRecord): Promise<void>
   remove(id: string): Promise<void>
+}
+
+interface PetOverlayApi {
+  onOpenSession(listener: (sessionId: string) => void): () => void
+  resetPosition(): void
+  sync(snapshot: DesktopPetSnapshot): void
 }
 
 interface PetSettingsState {
@@ -170,9 +177,10 @@ export function usePetController() {
   const setEnabled = useCallback((enabled: boolean) => updateSettings(setSettings, { enabled }), [])
   const setAnimated = useCallback((animated: boolean) => updateSettings(setSettings, { animated }), [])
   const setScale = useCallback((scale: number) => updateSettings(setSettings, { scale: clamp(scale, .7, 1.5) }), [])
-  const setPosition = useCallback((point?: PetPoint) => updateSettings(setSettings, point === undefined
-    ? { anchor: 'right', x: undefined, y: undefined }
-    : { x: Math.round(point.x), y: Math.round(point.y) }), [])
+  const setPosition = useCallback((_point?: PetPoint) => {
+    getPetOverlay()?.resetPosition()
+    updateSettings(setSettings, { anchor: 'right', x: undefined, y: undefined })
+  }, [])
   const deletePet = useCallback(async (petId: string) => {
     if (petId === DEFAULT_PET_ID) return
     try {
@@ -230,6 +238,38 @@ export function usePetController() {
 }
 
 export type PetController = ReturnType<typeof usePetController>
+
+export function PetOverlaySync({
+  controller,
+  hasCurrentError,
+  openSession,
+  useSessions
+}: {
+  controller: PetController
+  hasCurrentError: boolean
+  openSession(id: string): void
+  useSessions: PetUseSessions
+}): null {
+  const signal = useSessions((state) => selectPetSessionSignal(state, hasCurrentError))
+
+  useEffect(() => {
+    getPetOverlay()?.sync({
+      animated: controller.settings.animated,
+      enabled: controller.settings.enabled,
+      pet: {
+        id: controller.selectedPet.id,
+        displayName: controller.selectedPet.displayName,
+        spriteVersionNumber: controller.selectedPet.spriteVersionNumber,
+        spritesheetDataUrl: controller.selectedPet.spritesheetDataUrl
+      },
+      scale: controller.settings.scale,
+      signal
+    })
+  }, [controller.selectedPet, controller.settings.animated, controller.settings.enabled, controller.settings.scale, signal])
+
+  useEffect(() => getPetOverlay()?.onOpenSession(openSession), [openSession])
+  return null
+}
 
 export function PetOverlay({
   controller,
@@ -622,6 +662,10 @@ function petPreviewStyle(pet: PetRecord, width: number): CSSProperties {
 
 function getPetStore(): PetStoreApi | undefined {
   return (window as Window & { deepseekDesktop?: { petStore?: PetStoreApi } }).deepseekDesktop?.petStore
+}
+
+function getPetOverlay(): PetOverlayApi | undefined {
+  return (window as Window & { deepseekDesktop?: { petOverlay?: PetOverlayApi } }).deepseekDesktop?.petOverlay
 }
 
 function readPetSettings(): PetSettingsState {

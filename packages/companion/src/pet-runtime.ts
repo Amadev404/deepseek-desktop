@@ -180,9 +180,15 @@ export function resolvePetDragDirection(dx: number, dy: number, threshold = 4): 
 }
 
 export function defaultPetFrameOffset(row: number, column: number): PetPoint {
-  const anchor = DEFAULT_PET_FOOT_ANCHORS[row]?.[column]
-  if (anchor === undefined) return { x: 0, y: 0 }
-  return { x: DEFAULT_PET_FOOT_ANCHOR_X - anchor, y: 0 }
+  void column
+  return defaultPetRowOffset(row)
+}
+
+export function defaultPetRowOffset(row: number): PetPoint {
+  const anchors = DEFAULT_PET_FOOT_ANCHORS[row]
+  if (!anchors?.length) return { x: 0, y: 0 }
+  const average = anchors.reduce((total, value) => total + value, 0) / anchors.length
+  return { x: Math.round((DEFAULT_PET_FOOT_ANCHOR_X - average) * 2) / 2, y: 0 }
 }
 
 export function clampPetPosition(

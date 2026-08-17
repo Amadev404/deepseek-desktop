@@ -6,6 +6,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { ensureCompanionLink } from './companion-link.js'
 import { startHarness, stopHarness, type RunningHarness } from './harness.js'
 import { registerPetStoreIpc } from './pet-store.js'
+import { openPetWindow, registerPetWindowIpc } from './pet-window.js'
 import { chooseHarnessPort, isTrustedHarnessUrl } from './runtime.js'
 
 const PRODUCT_NAME = 'DeepSeek Desktop'
@@ -21,6 +22,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   registerPetStoreIpc(() => mainWindow?.webContents)
+  registerPetWindowIpc(() => mainWindow?.webContents)
   ipcMain.on('deepseek-desktop:quit', (event) => {
     if (event.sender === mainWindow?.webContents) app.quit()
   })
@@ -50,11 +52,15 @@ async function startDesktop(): Promise<void> {
   const cliPath = join(appPath, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
   const patchPath = join(appPath, 'build', 'desktop.patch.yml')
   const preloadPath = join(appPath, 'out', 'preload.cjs')
+  const petPreloadPath = join(appPath, 'out', 'pet-preload.cjs')
+  const petHtmlPath = join(appPath, 'out', 'pet.html')
   const companionDir = join(appPath, 'node_modules', '@deepseek-desktop', 'companion')
   if (!existsSync(nodePath)) throw new Error(`Bundled Node.js runtime is missing:\n${nodePath}`)
   if (!existsSync(cliPath)) throw new Error(`Bundled DeepSeek Harness entry is missing:\n${cliPath}`)
   if (!existsSync(patchPath)) throw new Error(`DeepSeek Desktop Harness overlay is missing:\n${patchPath}`)
   if (!existsSync(preloadPath)) throw new Error(`DeepSeek Desktop preload is missing:\n${preloadPath}`)
+  if (!isPrewarm && !existsSync(petPreloadPath)) throw new Error(`DeepSeek Desktop pet preload is missing:\n${petPreloadPath}`)
+  if (!isPrewarm && !existsSync(petHtmlPath)) throw new Error(`DeepSeek Desktop pet page is missing:\n${petHtmlPath}`)
   if (!existsSync(companionDir)) throw new Error(`DeepSeek Desktop Companion is missing:\n${companionDir}`)
 
   const cwd = join(app.getPath('userData'), 'launch-root')
@@ -93,6 +99,7 @@ async function startDesktop(): Promise<void> {
     app.quit()
     return
   }
+  await openPetWindow(petPreloadPath, petHtmlPath)
   mainWindow.show()
 }
 
@@ -128,7 +135,9 @@ function createWindow(harnessUrl: string, preloadPath: string): BrowserWindow {
   window.webContents.session.setPermissionCheckHandler(() => false)
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
   window.on('closed', () => {
-    if (mainWindow === window) mainWindow = undefined
+    if (mainWindow !== window) return
+    mainWindow = undefined
+    if (!stopping) app.quit()
   })
 
   return window

@@ -110,10 +110,13 @@ describe('pet geometry', () => {
     expect(resolvePetDragDirection(-4, 0)).toBe('running-left')
   })
 
-  it('keeps the built-in whale girl foot anchor stable across atlas frames', () => {
-    expect(defaultPetFrameOffset(6, 0)).toEqual({ x: -2, y: 0 })
-    expect(defaultPetFrameOffset(6, 2)).toEqual({ x: -10, y: 0 })
-    expect(defaultPetFrameOffset(1, 2)).toEqual({ x: -57, y: 0 })
+  it('uses one stable row offset so an animation loop cannot reset its position', () => {
+    expect(defaultPetFrameOffset(6, 0)).toEqual({ x: -4, y: 0 })
+    expect(defaultPetFrameOffset(6, 2)).toEqual({ x: -4, y: 0 })
+    expect(defaultPetFrameOffset(1, 0)).toEqual({ x: -41.5, y: 0 })
+    expect(defaultPetFrameOffset(1, 7)).toEqual({ x: -41.5, y: 0 })
+    expect(defaultPetFrameOffset(2, 0)).toEqual({ x: 30.5, y: 0 })
+    expect(defaultPetFrameOffset(2, 7)).toEqual({ x: 30.5, y: 0 })
     expect(defaultPetFrameOffset(9, 0)).toEqual({ x: 0, y: 0 })
   })
 })

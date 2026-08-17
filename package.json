@@ -1,6 +1,6 @@
 {
   "name": "deepseek-desktop",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "An unofficial Windows desktop shell for DeepSeek Harness.",
   "author": "DeepSeek Desktop contributors",
@@ -14,7 +14,7 @@
     "clean": "node -e \"const fs=require('node:fs');for(const p of ['out','packages/companion/lib'])fs.rmSync(p,{recursive:true,force:true})\"",
     "build:assets": "node scripts/build-assets.mjs",
     "build": "npm run clean && tsc -p tsconfig.json && npm run build:assets",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p packages/companion/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc -p packages/companion/tsconfig.json && tsc -p packages/pet-window/tsconfig.json",
     "test": "vitest run",
     "smoke:harness": "node scripts/smoke-harness.mjs",
     "smoke:desktop": "node scripts/smoke-desktop.mjs",

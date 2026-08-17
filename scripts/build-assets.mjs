@@ -1,5 +1,5 @@
 import { build } from 'esbuild'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -56,6 +56,31 @@ await build({
   sourcemap: false,
   legalComments: 'none'
 })
+
+await build({
+  entryPoints: [resolve(root, 'src', 'pet-preload.ts')],
+  outfile: resolve(root, 'out', 'pet-preload.cjs'),
+  bundle: true,
+  external: ['electron'],
+  format: 'cjs',
+  platform: 'node',
+  target: 'node24',
+  sourcemap: false,
+  legalComments: 'none'
+})
+
+await build({
+  entryPoints: [resolve(root, 'packages', 'pet-window', 'src', 'renderer.ts')],
+  outfile: resolve(root, 'out', 'pet-renderer.js'),
+  bundle: true,
+  format: 'iife',
+  platform: 'browser',
+  target: 'chrome142',
+  sourcemap: false,
+  legalComments: 'none'
+})
+
+await copyFile(resolve(root, 'src', 'pet.html'), resolve(root, 'out', 'pet.html'))
 
 const manifest = JSON.parse(await readFile(resolve(companion, 'package.json'), 'utf8'))
 const desktopManifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
