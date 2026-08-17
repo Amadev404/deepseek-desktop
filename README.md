@@ -6,7 +6,7 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 > 本项目是独立的社区项目，并非 DeepSeek 官方产品，也未获得 DeepSeek 官方背书。
 > DeepSeek 是 DeepSeek AI 的商标。
 
-## v0.2.0 特性
+## v0.3.0 特性
 
 - 内置官方 `@deepseek-ai/dsh@0.1.0-rc.6` 和 Node.js 24.11.0
 - 使用原生 Windows 窗口显示完整 Harness Web UI
@@ -20,6 +20,9 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 显示当前会话的输入、输出、缓存和推理 Token 统计
 - 使用官方 `session.models/selectModel` 接口提供三档思考强度滑块
 - 上拉框内可打开 Harness 设置或退出桌面端
+- 默认启用克制的“简约海洋”主题，也可随时切回官方原生外观
+- 新会话宽屏界面显示单张工作款鲸鱼娘立绘，进入对话或缩窄窗口后自动隐藏
+- 使用鲸鱼娘作为应用、安装包、快捷方式和账户菜单图标
 
 桌面壳不会复制、记录或管理 API Key，也不会修改官方 Harness 的 Agent 或 Profile 清单。
 余额请求由随应用打包的 Harness Companion 插件在主机侧完成，Renderer 只能获得余额结果，
@@ -27,6 +30,11 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 官方 Harness 在首次启动时会自行初始化缺失的 Web Profile，并维护
 `profiles/node_modules` 下的运行时 Junction。桌面端也只在该回退目录中维护自己的
 `@deepseek-desktop/companion` Junction；若同名位置是真实目录则拒绝覆盖并报错。
+
+DeepSeek Desktop 的程序代码采用 MIT License。鲸鱼娘应用图标、账户头像和工作款立绘
+不包含在 MIT 授权中，单独按 CC BY-NC-SA 4.0 使用，仅限非商业用途，并要求署名及
+相同方式共享。完整许可与创作链见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+和 `licenses/`。本项目仍是非官方社区客户端，不代表相关作者或 DeepSeek 官方背书。
 
 ## 开发
 
@@ -47,7 +55,7 @@ npm run package:dir
 npm run dist:win
 ```
 
-安装包输出到 `dist/DeepSeek-Desktop-Setup-0.2.0-x64.exe`。当前版本未进行代码签名，
+安装包输出到 `dist/DeepSeek-Desktop-Setup-0.3.0-x64.exe`。当前版本未进行代码签名，
 Windows SmartScreen 可能显示“未知发布者”。
 
 ## 数据目录

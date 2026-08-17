@@ -1,6 +1,6 @@
 {
   "name": "deepseek-desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "An unofficial Windows desktop shell for DeepSeek Harness.",
   "author": "DeepSeek Desktop contributors",
@@ -72,16 +72,17 @@
     },
     "files": [
       "out/**/*",
-      "build/icon.png",
+      "build/icon.ico",
       "build/desktop.patch.yml",
       "package.json",
       "LICENSE",
+      "licenses/**/*",
       "THIRD_PARTY_NOTICES.md",
       "!**/*.map",
       "!**/node_modules/@mistralai/mistralai/src/**"
     ],
     "win": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",

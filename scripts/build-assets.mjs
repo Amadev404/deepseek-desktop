@@ -29,6 +29,10 @@ const client = await build({
   format: 'cjs',
   platform: 'browser',
   target: 'chrome142',
+  loader: {
+    '.png': 'dataurl',
+    '.webp': 'dataurl'
+  },
   write: false,
   sourcemap: false,
   legalComments: 'none'
@@ -54,7 +58,7 @@ await build({
 })
 
 const manifest = JSON.parse(await readFile(resolve(companion, 'package.json'), 'utf8'))
-if (manifest.version !== '0.2.0') throw new Error('Companion version must match DeepSeek Desktop 0.2.0.')
+if (manifest.version !== '0.3.0') throw new Error('Companion version must match DeepSeek Desktop 0.3.0.')
 
 function indent(value, spaces) {
   const prefix = ' '.repeat(spaces)

@@ -102,7 +102,7 @@ function createWindow(harnessUrl: string, preloadPath: string): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    icon: join(app.getAppPath(), 'build', 'icon.png'),
+    icon: join(app.getAppPath(), 'build', 'icon.ico'),
     backgroundColor: '#f7f8fa',
     webPreferences: {
       contextIsolation: true,
