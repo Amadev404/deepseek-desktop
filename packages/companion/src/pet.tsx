@@ -13,6 +13,7 @@ import {
 import defaultSpritesheet from '../assets/deepseek-pet.webp'
 import {
   clampPetPosition,
+  petFrameAt,
   petAtlasRows,
   petTimeline,
   primaryAnimationDuration,
@@ -33,6 +34,7 @@ const PET_COOKIE_MAX_AGE = 31_536_000
 const DEFAULT_PET_ID = 'deepseek-whale-girl'
 const MAX_SPRITESHEET_BYTES = 12 * 1024 * 1024
 const COMPLETION_NOTICE_MS = 8_000
+const DRAG_SETTLE_MS = 540
 
 export type PetUseSessions = <T>(selector: (state: PetSessionSnapshot) => T) => T
 
@@ -96,9 +98,9 @@ const DEFAULT_PET: PetRecord = {
 }
 
 const PET_CSS = `
-.dsd-pet{--dsd-pet-scale:1.15;position:fixed;z-index:110;bottom:94px;width:calc(192px * var(--dsd-pet-scale));height:calc(208px * var(--dsd-pet-scale));padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 10px 16px rgb(0 0 0 / 28%));outline:none;touch-action:none;user-select:none}
+ .dsd-pet{--dsd-pet-scale:1.15;position:fixed;z-index:110;bottom:94px;width:calc(192px * var(--dsd-pet-scale));height:calc(208px * var(--dsd-pet-scale));padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 10px 16px rgb(0 0 0 / 28%));outline:none;touch-action:none;user-select:none;will-change:left,top;contain:layout paint}
 .dsd-pet[data-anchor='left']{left:18px}.dsd-pet[data-anchor='right']{right:clamp(18px,34vw,460px)}.dsd-pet[data-dragging='true']{cursor:grabbing;z-index:111}
-.dsd-petSprite{position:absolute;inset:0 auto auto 0;display:block;width:192px;height:208px;background-repeat:no-repeat;background-size:1536px var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);transform:scale(var(--dsd-pet-scale));transform-origin:left top}
+ .dsd-petSprite{position:absolute;inset:0 auto auto 0;display:block;width:var(--dsd-pet-frame-width);height:var(--dsd-pet-frame-height);background-repeat:no-repeat;background-size:var(--dsd-pet-atlas-width) var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);image-rendering:auto;will-change:background-position}
 .dsd-petStatus{position:absolute;right:4px;bottom:-27px;max-width:210px;overflow:hidden;padding:5px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-bg-base) 91%,transparent);box-shadow:var(--dsw-shadow-lv1);font:12px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
 .dsd-pet:hover .dsd-petStatus,.dsd-pet:focus-visible .dsd-petStatus,.dsd-pet[data-attention='true'] .dsd-petStatus{opacity:1;transform:none}.dsd-pet:focus-visible{outline:2px solid var(--dsw-alias-border-l3);outline-offset:4px}
 .dsd-petSectionTitle{justify-content:space-between}.dsd-petToggle{display:flex;align-items:center;gap:7px;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:400;cursor:pointer}.dsd-petToggle input{margin:0;accent-color:var(--dsw-alias-state-business-primary)}
@@ -250,6 +252,7 @@ export function PetOverlay({
   const signal = useSessions((state) => selectPetSessionSignal(state, hasCurrentError))
   const [completion, setCompletion] = useState<PetSignal>()
   const [action, setAction] = useState<PetAction>()
+  const [settle, setSettle] = useState<Extract<PetMode, 'running-left' | 'running-right'>>()
   const [drag, setDrag] = useState<PetDrag>()
   const [lookIndex, setLookIndex] = useState<number>()
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
@@ -258,6 +261,8 @@ export function PetOverlay({
   const actionKey = useRef(0)
   const actionTimer = useRef<number>()
   const completionTimer = useRef<number>()
+  const settleTimer = useRef<number>()
+  const dragFrame = useRef<number>()
   const dragRef = useRef<{
     offsetX: number
     offsetY: number
@@ -266,6 +271,7 @@ export function PetOverlay({
     startY: number
     lastX: number
     moved: boolean
+    direction: 'running-left' | 'running-right'
     point?: PetPoint
   }>()
   const suppressClick = useRef(false)
@@ -285,12 +291,15 @@ export function PetOverlay({
       completionTimer.current = window.setTimeout(() => setCompletion(undefined), COMPLETION_NOTICE_MS)
     } else if (signal.mode !== 'idle') {
       setCompletion(undefined)
+      setSettle(undefined)
     }
   }, [signal.key, signal.mode, signal.sessionId])
 
   useEffect(() => () => {
     if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
     if (completionTimer.current !== undefined) window.clearTimeout(completionTimer.current)
+    if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
+    if (dragFrame.current !== undefined) window.cancelAnimationFrame(dragFrame.current)
   }, [])
 
   useEffect(() => {
@@ -301,12 +310,12 @@ export function PetOverlay({
 
   const baseSignal = signal.mode === 'idle' && completion !== undefined ? completion : signal
   const startAction = useCallback((mode: PetAction['mode']) => {
-    if (baseSignal.mode !== 'idle' || dragRef.current !== undefined) return
+    if (baseSignal.mode !== 'idle' || dragRef.current !== undefined || settle !== undefined) return
     if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
     const next = { mode, key: ++actionKey.current }
     setAction(next)
     actionTimer.current = window.setTimeout(() => setAction(undefined), primaryAnimationDuration(mode))
-  }, [baseSignal.mode])
+  }, [baseSignal.mode, settle])
 
   useEffect(() => {
     if (controller.selectedPet.spriteVersionNumber !== 2 || !controller.settings.animated || baseSignal.mode !== 'idle' || action !== undefined || drag !== undefined) {
@@ -337,8 +346,8 @@ export function PetOverlay({
     ? undefined
     : clampPetPosition({ x: controller.settings.x, y: controller.settings.y }, petSize, viewport)
   const visiblePosition = drag ?? savedPosition
-  const mode: PetMode = drag?.direction ?? (baseSignal.mode === 'idle' && action !== undefined ? action.mode : baseSignal.mode)
-  const frame = usePetFrame(mode, drag !== undefined, `${controller.selectedPet.id}:${baseSignal.key}:${action?.key ?? 0}:${drag?.direction ?? ''}`, controller.settings.animated)
+  const mode: PetMode = drag?.direction ?? settle ?? (baseSignal.mode === 'idle' && action !== undefined ? action.mode : baseSignal.mode)
+  const frame = usePetFrame(mode, drag !== undefined, `${controller.selectedPet.id}:${baseSignal.key}:${action?.key ?? 0}:${drag?.direction ?? ''}:${settle ?? ''}`, controller.settings.animated)
   const looking = lookIndex !== undefined && mode === 'idle' && controller.selectedPet.spriteVersionNumber === 2
   const row = looking ? 9 + Math.floor(lookIndex / 8) : frame.row
   const column = looking ? lookIndex % 8 : frame.column
@@ -358,13 +367,20 @@ export function PetOverlay({
   } as unknown as CSSProperties
   const spriteStyle = {
     backgroundImage: `url(${controller.selectedPet.spritesheetDataUrl})`,
-    '--dsd-pet-atlas-height': `${petAtlasRows(controller.selectedPet.spriteVersionNumber) * PET_FRAME_HEIGHT}px`,
-    '--dsd-pet-x': `${-(column * PET_FRAME_WIDTH)}px`,
-    '--dsd-pet-y': `${-(row * PET_FRAME_HEIGHT)}px`
+    '--dsd-pet-frame-width': `${PET_FRAME_WIDTH * scale}px`,
+    '--dsd-pet-frame-height': `${PET_FRAME_HEIGHT * scale}px`,
+    '--dsd-pet-atlas-width': `${1536 * scale}px`,
+    '--dsd-pet-atlas-height': `${petAtlasRows(controller.selectedPet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`,
+    '--dsd-pet-x': `${-(column * PET_FRAME_WIDTH * scale)}px`,
+    '--dsd-pet-y': `${-(row * PET_FRAME_HEIGHT * scale)}px`
   } as CSSProperties
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>): void => {
     if (event.button !== 0) return
+    if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
+    setSettle(undefined)
+    if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
+    setAction(undefined)
     const rect = event.currentTarget.getBoundingClientRect()
     dragRef.current = {
       offsetX: event.clientX - rect.left,
@@ -373,7 +389,8 @@ export function PetOverlay({
       startX: event.clientX,
       startY: event.clientY,
       lastX: event.clientX,
-      moved: false
+      moved: false,
+      direction: 'running-right'
     }
     event.currentTarget.setPointerCapture(event.pointerId)
   }
@@ -384,20 +401,42 @@ export function PetOverlay({
     const moved = state.moved || Math.hypot(event.clientX - state.startX, event.clientY - state.startY) >= 4
     state.moved = moved
     if (!moved) return
-    const direction = event.clientX < state.lastX ? 'running-left' : 'running-right'
+    const deltaX = event.clientX - state.lastX
+    if (deltaX !== 0) state.direction = deltaX < 0 ? 'running-left' : 'running-right'
     state.lastX = event.clientX
     const point = clampPetPosition({ x: event.clientX - state.offsetX, y: event.clientY - state.offsetY }, petSize, viewport)
     state.point = point
-    setDrag({ ...point, direction })
+    if (dragFrame.current === undefined) {
+      dragFrame.current = window.requestAnimationFrame(() => {
+        dragFrame.current = undefined
+        const next = dragRef.current
+        if (next?.moved && next.point !== undefined) setDrag({ ...next.point, direction: next.direction })
+      })
+    }
   }
 
   const finishDrag = (event: ReactPointerEvent<HTMLButtonElement>, persist: boolean): void => {
     const state = dragRef.current
     if (!state || state.pointerId !== event.pointerId) return
     suppressClick.current = state.moved
+    const moved = state.moved
+    const direction = state.direction
+    const point = state.point
     dragRef.current = undefined
+    if (dragFrame.current !== undefined) {
+      window.cancelAnimationFrame(dragFrame.current)
+      dragFrame.current = undefined
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-    if (persist && state.moved && state.point !== undefined) controller.setPosition(state.point)
+    if (persist && moved && point !== undefined) {
+      controller.setPosition(point)
+      setSettle(direction)
+      if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
+      settleTimer.current = window.setTimeout(() => {
+        settleTimer.current = undefined
+        setSettle(undefined)
+      }, DRAG_SETTLE_MS)
+    }
     setDrag(undefined)
   }
 
@@ -521,23 +560,25 @@ export function PetSettings({ controller }: { controller: PetController }): Reac
 
 function usePetFrame(mode: PetMode, continuous: boolean, key: string, animated: boolean): PetFrameStep {
   const timeline = petTimeline(mode, continuous)
-  const [index, setIndex] = useState(0)
+  const [sample, setSample] = useState(() => petFrameAt(timeline, 0))
   useEffect(() => {
-    setIndex(0)
+    setSample(petFrameAt(timeline, 0))
     if (!animated || window.matchMedia('(prefers-reduced-motion: reduce)').matches || timeline.steps.length < 2) return
-    let current = 0
-    let timer: number
-    const schedule = (): void => {
-      timer = window.setTimeout(() => {
-        current = current + 1 >= timeline.steps.length ? timeline.loopStart : current + 1
-        setIndex(current)
-        schedule()
-      }, timeline.steps[current]?.duration ?? 140)
+    let frame = 0
+    const startedAt = performance.now()
+    let lastIndex = -1
+    const tick = (now: number): void => {
+      const next = petFrameAt(timeline, now - startedAt)
+      if (next.index !== lastIndex) {
+        lastIndex = next.index
+        setSample(next)
+      }
+      frame = window.requestAnimationFrame(tick)
     }
-    schedule()
-    return () => window.clearTimeout(timer)
+    frame = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(frame)
   }, [animated, key, timeline])
-  return timeline.steps[index] ?? timeline.steps[0] ?? { column: 0, duration: 1_000, row: 0 }
+  return sample.step
 }
 
 function petPreviewStyle(pet: PetRecord, width: number): CSSProperties {

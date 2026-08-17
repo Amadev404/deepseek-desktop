@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampPetPosition,
+  petFrameAt,
   petAtlasRows,
   petTimeline,
   primaryAnimationDuration,
@@ -63,6 +64,15 @@ describe('Codex animation metrics', () => {
     expect(timeline.loopStart).toBe(0)
     expect(timeline.steps).toHaveLength(8)
     expect(timeline.steps.every((step) => step.row === 2)).toBe(true)
+  })
+
+  it('advances from elapsed time instead of dropping frames after a delayed tick', () => {
+    const timeline = petTimeline('running')
+    expect(petFrameAt(timeline, 0).index).toBe(0)
+    expect(petFrameAt(timeline, 119).index).toBe(0)
+    expect(petFrameAt(timeline, 120).index).toBe(1)
+    expect(petFrameAt(timeline, 2_460).index).toBe(18)
+    expect(petFrameAt(timeline, 2_460 + 1_680).index).toBe(19)
   })
 })
 

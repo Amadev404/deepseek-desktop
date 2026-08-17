@@ -110,6 +110,8 @@ try {
     assert(Math.abs(draggedPetRect.x - initialPetRect.x) > 40, 'dragging did not move the DeepSeek pet')
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dragTarget, button: 'left', buttons: 0, clickCount: 1 })
     await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-dragging') === 'false' && document.cookie.includes('deepseek_desktop_pet_settings')`, 5_000)
+    await waitForEvaluation(cdp, `['running-left', 'running-right'].includes(document.querySelector('.dsd-pet')?.getAttribute('data-mode'))`, 2_000)
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
     await cdp.send('Page.reload')
     await waitForDom(cdp, '.dsd-pet', 30_000)
     const persistedPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y } : null })()`)

@@ -42,6 +42,11 @@ export interface PetTimeline {
   steps: readonly PetFrameStep[]
 }
 
+export interface PetFrameSample {
+  index: number
+  step: PetFrameStep
+}
+
 export interface PetPoint {
   x: number
   y: number
@@ -113,6 +118,23 @@ export function selectPetSessionSignal(state: PetSessionSnapshot, hasCurrentErro
 export function petTimeline(mode: PetMode, continuous = false): PetTimeline {
   if (mode === 'idle') return IDLE_TIMELINE
   return continuous ? CONTINUOUS_TIMELINES[mode] : TRANSIENT_TIMELINES[mode]
+}
+
+export function petFrameAt(timeline: PetTimeline, elapsedMs: number): PetFrameSample {
+  if (timeline.steps.length === 0) return { index: 0, step: { column: 0, duration: 1_000, row: 0 } }
+  const firstLoopEnd = timeline.loopStart > 0
+    ? timeline.steps.slice(0, timeline.loopStart).reduce((total, step) => total + step.duration, 0)
+    : 0
+  const loopSteps = timeline.steps.slice(timeline.loopStart)
+  const loopDuration = loopSteps.reduce((total, step) => total + step.duration, 0)
+  let remaining = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0
+  if (loopDuration > 0 && remaining >= firstLoopEnd) remaining = firstLoopEnd + ((remaining - firstLoopEnd) % loopDuration)
+  let index = 0
+  while (index < timeline.steps.length - 1 && remaining >= timeline.steps[index].duration) {
+    remaining -= timeline.steps[index].duration
+    index += 1
+  }
+  return { index, step: timeline.steps[index] }
 }
 
 export function primaryAnimationDuration(mode: Exclude<PetMode, 'idle'>): number {
