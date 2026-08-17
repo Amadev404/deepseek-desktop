@@ -90,15 +90,47 @@ try {
       await captureVariants(cdp, process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT)
     }
 
+    const initialPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null })()`)
+    assert(initialPetRect, 'DeepSeek pet does not have a layout box')
+    const petCenter = { x: initialPetRect.x + initialPetRect.width / 2, y: initialPetRect.y + initialPetRect.height / 2 }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...petCenter })
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'waving'`, 5_000)
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...petCenter, button: 'left', buttons: 0, clickCount: 1 })
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'jumping'`, 5_000)
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+
+    const dragTarget = { x: petCenter.x - 90, y: petCenter.y - 24 }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...dragTarget, button: 'left', buttons: 1 })
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'running-left' && document.querySelector('.dsd-pet')?.getAttribute('data-dragging') === 'true'`, 5_000)
+    const draggedPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight } : null })()`)
+    assert(draggedPetRect && draggedPetRect.x >= 0 && draggedPetRect.y >= 0 && draggedPetRect.right <= draggedPetRect.width && draggedPetRect.bottom <= draggedPetRect.height, `dragged pet left the viewport: ${JSON.stringify(draggedPetRect)}`)
+    assert(Math.abs(draggedPetRect.x - initialPetRect.x) > 40, 'dragging did not move the DeepSeek pet')
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dragTarget, button: 'left', buttons: 0, clickCount: 1 })
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-dragging') === 'false' && document.cookie.includes('deepseek_desktop_pet_settings')`, 5_000)
+    await cdp.send('Page.reload')
+    await waitForDom(cdp, '.dsd-pet', 30_000)
+    const persistedPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y } : null })()`)
+    assert(persistedPetRect && Math.abs(persistedPetRect.x - draggedPetRect.x) < 3 && Math.abs(persistedPetRect.y - draggedPetRect.y) < 3, `dragged pet position did not persist: ${JSON.stringify({ draggedPetRect, persistedPetRect })}`)
+
     const triggerCenter = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-trigger')?.getBoundingClientRect(); return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null })()`)
     assert(triggerCenter, 'Desktop account trigger is missing')
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...triggerCenter, button: 'left', clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...triggerCenter, button: 'left', clickCount: 1 })
-    await waitForDom(cdp, '.dsd-petSelect', 5_000)
+    await waitForDom(cdp, '.dsd-petSummary', 5_000)
+    assert(await cdp.evaluate(`!document.querySelector('.dsd-popover .dsd-petManage')`), 'account popover exposes advanced pet controls')
     await cdp.evaluate(`document.querySelector('.dsd-petToggle input')?.click()`)
     await waitForEvaluation(cdp, `!document.querySelector('.dsd-pet')`, 5_000)
     await cdp.evaluate(`document.querySelector('.dsd-petToggle input')?.click()`)
     await waitForDom(cdp, '.dsd-pet', 5_000)
+    await cdp.evaluate(`document.querySelector('.dsd-petSummary')?.click()`)
+    await waitForDom(cdp, '.dsd-petDialog', 5_000)
+    assert(await cdp.evaluate(`Boolean(document.querySelector('.dsd-petDialog input[type="range"]') && document.querySelector('.dsd-petChoice[data-pet-id="deepseek-whale-girl"]'))`), 'pet management dialog is incomplete')
+    if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
+      await captureScreenshot(cdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'pet-dialog'))
+    }
     await waitForEvaluation(cdp, `(() => {
       const section = document.querySelector('[aria-labelledby="dsd-balance-title"]')
       const text = section?.textContent ?? ''
@@ -114,15 +146,19 @@ try {
       await cdp.send('Page.reload')
       await waitForDom(cdp, '.dsd-trigger', 30_000)
       await cdp.evaluate(`document.querySelector('.dsd-trigger')?.click()`)
-      await waitForDom(cdp, '.dsd-petSelect option[value="smoke-custom-pet"]', 10_000)
-      await cdp.evaluate(`(() => { const select = document.querySelector('.dsd-petSelect'); select.value = 'smoke-custom-pet'; select.dispatchEvent(new Event('change', { bubbles: true })) })()`)
+      await cdp.evaluate(`document.querySelector('.dsd-petSummary')?.click()`)
+      await waitForDom(cdp, '.dsd-petChoice[data-pet-id="smoke-custom-pet"]', 10_000)
+      await cdp.evaluate(`document.querySelector('.dsd-petChoice[data-pet-id="smoke-custom-pet"]')?.click()`)
       await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-pet-id') === 'smoke-custom-pet'`, 5_000)
       await cdp.send('Page.reload')
       await waitForDom(cdp, '.dsd-trigger', 30_000)
       await cdp.evaluate(`document.querySelector('.dsd-trigger')?.click()`)
-      await waitForEvaluation(cdp, `document.querySelector('.dsd-petSelect')?.value === 'smoke-custom-pet'`, 10_000)
+      await cdp.evaluate(`document.querySelector('.dsd-petSummary')?.click()`)
+      await waitForEvaluation(cdp, `document.querySelector('.dsd-petChoice[data-pet-id="smoke-custom-pet"]')?.getAttribute('aria-pressed') === 'true'`, 10_000)
       await cdp.evaluate(`window.deepseekDesktop.petStore.remove('smoke-custom-pet')`)
     }
+    await cdp.evaluate(`document.querySelector('.dsd-petDialogClose')?.click()`)
+    await waitForEvaluation(cdp, `!document.querySelector('.dsd-petDialog')`, 5_000)
 
     const state = await cdp.evaluate(`(async () => ({
       origin: location.origin,
@@ -133,6 +169,9 @@ try {
       avatarReady: [...document.querySelectorAll('.dsd-avatarImage')].every((node) => node.complete && node.naturalWidth > 0),
       pet: Boolean(document.querySelector('.dsd-pet')),
       petSpriteData: getComputedStyle(document.querySelector('.dsd-petSprite')).backgroundImage.includes('data:image/webp'),
+      petDraggable: getComputedStyle(document.querySelector('.dsd-pet')).touchAction === 'none',
+      petMode: document.querySelector('.dsd-pet')?.getAttribute('data-mode'),
+      petSummary: Boolean(document.querySelector('.dsd-petSummary')),
       petStoreCount: window.deepseekDesktop?.petStore ? (await window.deepseekDesktop.petStore.list()).length : -1,
       codexPetNodes: document.querySelectorAll('.codex-pet,[data-codex-pet]').length,
       balanceStatus: (() => {
@@ -159,6 +198,8 @@ try {
     assert(state.popover, `Desktop account popover did not open: ${JSON.stringify(state)}`)
     assert(state.avatarReady, 'whale-girl avatar did not decode')
     assert(state.pet && state.petSpriteData, 'DeepSeek pet sprite did not decode')
+    assert(state.petDraggable && state.petMode, 'DeepSeek pet drag runtime is unavailable')
+    assert(state.petSummary, 'compact DeepSeek pet setting is missing')
     assert(state.petStoreCount >= 0, 'DeepSeek pet store bridge did not respond')
     assert(state.codexPetNodes === 0, 'DeepSeek renderer claimed a Codex pet node')
     if (realHome) {
@@ -256,7 +297,8 @@ async function captureVariants(cdp, screenshotPath) {
 
   const phase = await cdp.evaluate(`document.querySelector('[data-phase]')?.getAttribute('data-phase')`)
   await cdp.evaluate(`document.querySelector('[data-phase]')?.setAttribute('data-phase', 'active')`)
-  await waitForEvaluation(cdp, `getComputedStyle(document.querySelector('.dsd-character')).visibility === 'hidden'`, 5_000)
+  await waitForEvaluation(cdp, `(() => { const style = getComputedStyle(document.querySelector('.dsd-character')); return style.visibility === 'visible' && Number(style.opacity) > 0 })()`, 5_000)
+  if (screenshotPath) await captureScreenshot(cdp, variantPath(screenshotPath, 'active'))
   await cdp.evaluate(`document.querySelector('[data-phase]')?.setAttribute('data-phase', 'hero')`)
   assert(phase === 'hero', `expected the isolated session phase to be hero, received ${phase}`)
 

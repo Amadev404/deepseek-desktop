@@ -1,6 +1,6 @@
 {
   "name": "deepseek-desktop",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "An unofficial Windows desktop shell for DeepSeek Harness.",
   "author": "DeepSeek Desktop contributors",

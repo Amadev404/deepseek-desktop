@@ -14,7 +14,7 @@ export interface StoredPetRecord {
   id: string
   displayName: string
   description: string
-  spriteVersionNumber: 2
+  spriteVersionNumber: 1 | 2
   spritesheetDataUrl: string
 }
 
@@ -82,7 +82,7 @@ function isStoredPetRecord(value: unknown): value is StoredPetRecord {
     && record.displayName.length <= 80
     && typeof record.description === 'string'
     && record.description.length <= 160
-    && record.spriteVersionNumber === 2
+    && (record.spriteVersionNumber === 1 || record.spriteVersionNumber === 2)
     && typeof record.spritesheetDataUrl === 'string'
     && /^data:image\/(?:webp|png);base64,[A-Za-z0-9+/=]+$/.test(record.spritesheetDataUrl)
 }

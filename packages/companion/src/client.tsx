@@ -1,5 +1,5 @@
 import type { IApiClient, ModelReasoningEffort, SessionId, SessionModels } from '@deepseek-ai/dsh-client-connection/client'
-import type { ClientContext, ISessions, ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ClientContext, ConversationSnapshot, ISessions, ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import {
@@ -107,8 +107,10 @@ const CSS = `
 .dsd-action svg{width:16px;height:16px;color:var(--dsw-alias-label-secondary)}
 .dsd-actionDanger{color:var(--dsw-alias-state-error-primary)}
 .dsd-actionDanger svg{color:currentColor}
-.dsd-character{display:block;visibility:hidden;position:fixed;z-index:0;right:max(20px,4vw);bottom:0;width:min(30vw,420px);max-height:78vh;object-fit:contain;object-position:bottom;opacity:0;transform:translateY(6px);pointer-events:none;user-select:none;filter:drop-shadow(0 14px 24px rgba(21,45,83,.16));transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
-body:has([data-phase='hero']) .dsd-character{visibility:visible;opacity:.82;transform:none;transition-delay:0s}
+.dsd-character{display:block;visibility:hidden;position:fixed;z-index:1;right:max(20px,4vw);bottom:0;width:min(30vw,420px);max-height:78vh;object-fit:contain;object-position:bottom;opacity:0;transform:translateY(6px);pointer-events:none;user-select:none;filter:drop-shadow(0 14px 24px rgba(21,45,83,.16));transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
+body:has([data-phase='hero']) .dsd-character,body:has([data-phase='active']) .dsd-character{visibility:visible;transform:none;transition-delay:0s}
+body:has([data-phase='hero']) .dsd-character{opacity:.82}
+body:has([data-phase='active']) .dsd-character{right:max(12px,2vw);width:min(24vw,340px);max-height:68vh;opacity:.34}
 body:has([data-phase='hero']) [data-phase='hero']{background:transparent}
 body:has([data-phase='hero']) [data-phase='hero'] > *{position:relative;z-index:1}
 @media(max-width:1179px){.dsd-character{display:none!important}}
@@ -133,6 +135,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   const [balance, setBalance] = useState<BalanceResult | undefined>()
   const [balanceLoading, setBalanceLoading] = useState(false)
   const currentId = useSessions((snapshot) => snapshot.current)
+  const conversation = useConversation(sessions, currentId)
   const usage = useProjection<TokenUsageProjection>(sessions, currentId, 'tokenUsage')
   const reasoning = useProjection<ReasoningUsageProjection>(sessions, currentId, 'desktopReasoningUsage')
   const [models, setModels] = useState<ModelState>({ phase: 'idle' })
@@ -179,6 +182,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
     if (!open) return
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target as Node
+      if (target instanceof Element && target.closest('[data-dsd-pet-dialog]')) return
       if (!rootRef.current?.contains(target) && !popoverRef.current?.contains(target)) setOpen(false)
     }
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -226,7 +230,12 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   return (
     <>
       {createPortal(<img className="dsd-character" src={maidWork} alt="" aria-hidden="true" />, document.body)}
-      <PetOverlay controller={pet} useSessions={useSessions as PetUseSessions} />
+      <PetOverlay
+        controller={pet}
+        hasCurrentError={Boolean(conversation?.lastAgentError || conversation?.promptError)}
+        openSession={(id) => sessions.open(id as SessionId)}
+        useSessions={useSessions as PetUseSessions}
+      />
       <div className="dsd-root" ref={rootRef}>
         <button
           type="button"
@@ -363,6 +372,15 @@ function useProjection<T>(sessions: ISessions, sessionId: SessionId | undefined,
     if (!sessionId) return undefined
     return sessions.binding(sessionId)?.session.projections.faceOf(key) as ObservableSnapshot<T> | undefined
   }, [key, sessionId, sessions])
+  return useSyncExternalStore(
+    face ? face.subscribe.bind(face) : EMPTY_SUBSCRIBE,
+    face ? face.getSnapshot.bind(face) : EMPTY_SNAPSHOT,
+    face ? face.getSnapshot.bind(face) : EMPTY_SNAPSHOT
+  )
+}
+
+function useConversation(sessions: ISessions, sessionId: SessionId | undefined): ConversationSnapshot | undefined {
+  const face = useMemo(() => sessionId ? sessions.binding(sessionId)?.session : undefined, [sessionId, sessions])
   return useSyncExternalStore(
     face ? face.subscribe.bind(face) : EMPTY_SUBSCRIBE,
     face ? face.getSnapshot.bind(face) : EMPTY_SNAPSHOT,

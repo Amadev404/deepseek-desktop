@@ -6,7 +6,7 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 > 本项目是独立的社区项目，并非 DeepSeek 官方产品，也未获得 DeepSeek 官方背书。
 > DeepSeek 是 DeepSeek AI 的商标。
 
-## v0.4.0 特性
+## v0.5.0 特性
 
 - 内置官方 `@deepseek-ai/dsh@0.1.0-rc.6` 和 Node.js 24.11.0
 - 使用原生 Windows 窗口显示完整 Harness Web UI
@@ -20,9 +20,11 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 显示当前会话的输入、输出、缓存和推理 Token 统计
 - 使用官方 `session.models/selectModel` 接口提供三档思考强度滑块
 - 上拉框内可打开 Harness 设置或退出桌面端
-- 保持 Harness 原生配色，仅在新会话宽屏界面显示单张工作款鲸鱼娘立绘
-- 内置 DeepSeek 宠物，支持待机、工作、等待、鼠标 16 方向追视和点击放大
-- 支持导入 Codex v2 `pet.json` 与 `1536×2288` `spritesheet.webp` 自定义宠物
+- 保持 Harness 原生配色，在宽屏新会话和对话界面持续显示工作款鲸鱼娘立绘
+- 内置 DeepSeek 宠物，使用 Codex 九状态动画、官方播放节奏和任务完成/失败/待处理提醒
+- 支持悬停挥手、点击跳跃、16 方向追视和带左右奔跑动画的自由拖动，位置跨重载保存
+- 账户上拉框只显示桌宠摘要，选择、动画、大小、位置和导入操作集中在独立管理窗
+- 支持导入 Codex V1 `1536×1872` 与 V2 `1536×2288` 自定义宠物包
 - DeepSeek 宠物使用独立命名空间和 `%APPDATA%\DeepSeek Desktop\pets`，不读取或覆盖 Codex 宠物
 - 使用鲸鱼娘作为应用、安装包、快捷方式和账户菜单图标
 
@@ -58,7 +60,7 @@ npm run package:dir
 npm run dist:win
 ```
 
-安装包输出到 `dist/DeepSeek-Desktop-Setup-0.4.0-x64.exe`。当前版本未进行代码签名，
+安装包输出到 `dist/DeepSeek-Desktop-Setup-0.5.0-x64.exe`。当前版本未进行代码签名，
 Windows SmartScreen 可能显示“未知发布者”。
 
 ## 数据目录
