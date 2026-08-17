@@ -52,6 +52,8 @@ export interface PetPoint {
   y: number
 }
 
+export type PetAnimationCadence = 'codex' | 'smooth'
+
 export const PET_FRAME_WIDTH = 192
 export const PET_FRAME_HEIGHT = 208
 export const PET_ATLAS_COLUMNS = 8
@@ -73,9 +75,25 @@ const ANIMATIONS: Record<Exclude<PetMode, 'idle'>, { row: number; frames: number
   review: { row: 8, frames: 6, duration: 150, finalDuration: 280 }
 }
 
+const SMOOTH_ANIMATION_DURATION = 83
+const SMOOTH_FINAL_FRAME_DURATION = 125
+const DEFAULT_PET_FOOT_ANCHOR_X = 96
+const DEFAULT_PET_FOOT_ANCHORS: Readonly<Record<number, readonly number[]>> = {
+  1: [137, 150, 153, 146, 78, 149, 145, 143],
+  2: [55, 78, 54, 61, 90, 84.5, 52, 50],
+  3: [92, 87, 78, 80.5],
+  4: [86, 101, 97, 82, 85],
+  5: [98, 111, 120, 120, 123.5, 110, 90, 86],
+  6: [98, 103, 106, 106, 95.5, 91],
+  7: [96, 98, 92, 91.5, 86, 86],
+  8: [90, 102, 89.5, 83, 79, 75]
+}
+
 const IDLE_TIMELINE: PetTimeline = { steps: IDLE_STEPS, loopStart: 0 }
 const TRANSIENT_TIMELINES = buildTimelines(false)
 const CONTINUOUS_TIMELINES = buildTimelines(true)
+const SMOOTH_TRANSIENT_TIMELINES = buildTimelines(false, 'smooth')
+const SMOOTH_CONTINUOUS_TIMELINES = buildTimelines(true, 'smooth')
 
 export function selectPetSessionSignal(state: PetSessionSnapshot, hasCurrentError = false): PetSignal {
   const currentId = state.current
@@ -116,8 +134,9 @@ export function selectPetSessionSignal(state: PetSessionSnapshot, hasCurrentErro
   return { mode: 'idle', key: `idle:${currentId ?? ''}`, label: '待机中' }
 }
 
-export function petTimeline(mode: PetMode, continuous = false): PetTimeline {
+export function petTimeline(mode: PetMode, continuous = false, cadence: PetAnimationCadence = 'codex'): PetTimeline {
   if (mode === 'idle') return IDLE_TIMELINE
+  if (cadence === 'smooth') return continuous ? SMOOTH_CONTINUOUS_TIMELINES[mode] : SMOOTH_TRANSIENT_TIMELINES[mode]
   return continuous ? CONTINUOUS_TIMELINES[mode] : TRANSIENT_TIMELINES[mode]
 }
 
@@ -160,6 +179,12 @@ export function resolvePetDragDirection(dx: number, dy: number, threshold = 4): 
   return undefined
 }
 
+export function defaultPetFrameOffset(row: number, column: number): PetPoint {
+  const anchor = DEFAULT_PET_FOOT_ANCHORS[row]?.[column]
+  if (anchor === undefined) return { x: 0, y: 0 }
+  return { x: DEFAULT_PET_FOOT_ANCHOR_X - anchor, y: 0 }
+}
+
 export function clampPetPosition(
   point: PetPoint,
   petSize: { width: number; height: number },
@@ -176,13 +201,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-function buildTimelines(continuous: boolean): Record<Exclude<PetMode, 'idle'>, PetTimeline> {
+function buildTimelines(continuous: boolean, cadence: PetAnimationCadence = 'codex'): Record<Exclude<PetMode, 'idle'>, PetTimeline> {
   const timelines = {} as Record<Exclude<PetMode, 'idle'>, PetTimeline>
   for (const mode of Object.keys(ANIMATIONS) as Array<Exclude<PetMode, 'idle'>>) {
     const animation = ANIMATIONS[mode]
     const primary = Array.from({ length: animation.frames }, (_, column) => ({
       column,
-      duration: column === animation.frames - 1 ? animation.finalDuration : animation.duration,
+      duration: cadence === 'smooth'
+        ? column === animation.frames - 1 ? SMOOTH_FINAL_FRAME_DURATION : SMOOTH_ANIMATION_DURATION
+        : column === animation.frames - 1 ? animation.finalDuration : animation.duration,
       row: animation.row
     }))
     timelines[mode] = continuous

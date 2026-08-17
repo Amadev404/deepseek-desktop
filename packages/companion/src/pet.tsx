@@ -13,6 +13,7 @@ import {
 import defaultSpritesheet from '../assets/deepseek-pet.webp'
 import {
   clampPetPosition,
+  defaultPetFrameOffset,
   petFrameAt,
   petAtlasRows,
   petTimeline,
@@ -90,9 +91,9 @@ const DEFAULT_PET: PetRecord = {
 }
 
 const PET_CSS = `
- .dsd-pet{--dsd-pet-scale:1.15;position:fixed;z-index:110;bottom:94px;width:calc(192px * var(--dsd-pet-scale));height:calc(208px * var(--dsd-pet-scale));padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 10px 16px rgb(0 0 0 / 28%));outline:none;touch-action:none;user-select:none;will-change:left,top;contain:layout paint}
+ .dsd-pet{--dsd-pet-scale:1.15;position:fixed;z-index:110;bottom:94px;width:calc(192px * var(--dsd-pet-scale));height:calc(208px * var(--dsd-pet-scale));padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 8px 12px rgb(0 0 0 / 22%));outline:none;touch-action:none;user-select:none;will-change:left,top;contain:layout}
 .dsd-pet[data-anchor='left']{left:18px}.dsd-pet[data-anchor='right']{right:clamp(18px,34vw,460px)}.dsd-pet[data-dragging='true']{cursor:grabbing;z-index:111}
- .dsd-petSprite{position:absolute;inset:0 auto auto 0;display:block;width:var(--dsd-pet-frame-width);height:var(--dsd-pet-frame-height);background-repeat:no-repeat;background-size:var(--dsd-pet-atlas-width) var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);image-rendering:auto;will-change:background-position}
+ .dsd-petSprite{position:absolute;inset:0 auto auto 0;display:block;width:var(--dsd-pet-frame-width);height:var(--dsd-pet-frame-height);background-repeat:no-repeat;background-size:var(--dsd-pet-atlas-width) var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);transform:translate(var(--dsd-pet-offset-x,0),var(--dsd-pet-offset-y,0));image-rendering:auto;will-change:background-position,transform}
 .dsd-petStatus{position:absolute;right:4px;bottom:-27px;max-width:210px;overflow:hidden;padding:5px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-bg-base) 91%,transparent);box-shadow:var(--dsw-shadow-lv1);font:12px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
 .dsd-pet:hover .dsd-petStatus,.dsd-pet:focus-visible .dsd-petStatus,.dsd-pet[data-attention='true'] .dsd-petStatus{opacity:1;transform:none}.dsd-pet:focus-visible{outline:2px solid var(--dsw-alias-border-l3);outline-offset:4px}
 .dsd-petSectionTitle{justify-content:space-between}.dsd-petToggle{display:flex;align-items:center;gap:7px;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:400;cursor:pointer}.dsd-petToggle input{margin:0;accent-color:var(--dsw-alias-state-business-primary)}
@@ -355,11 +356,20 @@ export function PetOverlay({
     : clampPetPosition({ x: controller.settings.x, y: controller.settings.y }, petSize, viewport)
   const hoverMode: PetMode = hovered && baseSignal.mode === 'idle' ? 'jumping' : baseSignal.mode
   const mode: PetMode = drag?.direction ?? hoverMode
-  const frame = usePetFrame(mode, drag?.direction !== undefined, `${controller.selectedPet.id}:${baseSignal.key}:${hovered}:${drag?.direction ?? ''}`, controller.settings.animated)
+  const frame = usePetFrame(
+    mode,
+    drag?.direction !== undefined,
+    `${controller.selectedPet.id}:${baseSignal.key}:${hovered}:${drag?.direction ?? ''}`,
+    controller.settings.animated,
+    controller.selectedPet.id === DEFAULT_PET_ID
+  )
   const looking = lookIndex !== undefined && mode === 'idle' && pointerLookEnabled
   const calmFrameRow = controller.selectedPet.id === DEFAULT_PET_ID && frame.row === 0 ? 6 : frame.row
   const row = looking ? 9 + Math.floor(lookIndex / 8) : calmFrameRow
   const column = looking ? lookIndex % 8 : frame.column
+  const frameOffset = controller.selectedPet.id === DEFAULT_PET_ID && !looking
+    ? defaultPetFrameOffset(row, column)
+    : { x: 0, y: 0 }
   const attention = baseSignal.mode === 'failed' || baseSignal.mode === 'review' || baseSignal.mode === 'waiting'
   const label = drag !== undefined
     ? '正在移动'
@@ -379,7 +389,9 @@ export function PetOverlay({
     '--dsd-pet-atlas-width': `${1536 * scale}px`,
     '--dsd-pet-atlas-height': `${petAtlasRows(controller.selectedPet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`,
     '--dsd-pet-x': `${-(column * PET_FRAME_WIDTH * scale)}px`,
-    '--dsd-pet-y': `${-(row * PET_FRAME_HEIGHT * scale)}px`
+    '--dsd-pet-y': `${-(row * PET_FRAME_HEIGHT * scale)}px`,
+    '--dsd-pet-offset-x': `${frameOffset.x * scale}px`,
+    '--dsd-pet-offset-y': `${frameOffset.y * scale}px`
   } as CSSProperties
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>): void => {
@@ -576,8 +588,8 @@ export function PetSettings({ controller }: { controller: PetController }): Reac
   </>
 }
 
-function usePetFrame(mode: PetMode, continuous: boolean, key: string, animated: boolean): PetFrameStep {
-  const timeline = petTimeline(mode, continuous)
+function usePetFrame(mode: PetMode, continuous: boolean, key: string, animated: boolean, smoothCadence: boolean): PetFrameStep {
+  const timeline = petTimeline(mode, continuous, smoothCadence ? 'smooth' : 'codex')
   const [sample, setSample] = useState(() => petFrameAt(timeline, 0))
   useEffect(() => {
     setSample(petFrameAt(timeline, 0))

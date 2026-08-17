@@ -6,7 +6,7 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 > 本项目是独立的社区项目，并非 DeepSeek 官方产品，也未获得 DeepSeek 官方背书。
 > DeepSeek 是 DeepSeek AI 的商标。
 
-## v0.7.0 特性
+## v0.8.0 特性
 
 - 内置官方 `@deepseek-ai/dsh@0.1.0-rc.6` 和 Node.js 24.11.0
 - 使用原生 Windows 窗口显示完整 Harness Web UI
@@ -27,6 +27,9 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 内置宠物不启用全局鼠标追视；导入的 Codex V2 宠物仍支持 16 方向追视
 - 使用基于 elapsed time 的 `requestAnimationFrame` 播放器，掉帧后自动追上正确帧
 - 拖动事件按显示帧合并并直接更新宠物位置，避免每帧重渲染整个 React 组件
+- 清理内置鲸鱼娘图集各行动帧的残余 Alpha 块，并清空未使用单元格，深色背景下不再出现矩形残片
+- 内置鲸鱼娘按每帧脚底锚点补偿显示位置；静态状态与跑步松手后的待机切换不再横向跳动
+- 内置鲸鱼娘的活动帧以约 12 FPS 更新；导入的 Codex 宠物继续采用其原始 Codex 节奏
 - 已完成的旧会话不会持续占用宠物动作，任务切换会清理失效的交互状态
 - DeepSeek 宠物只在自己的 Renderer、Cookie、桥接和 `%APPDATA%\\DeepSeek Desktop\\pets` 中运行，不创建或覆盖 Codex 宠物窗口
 - 账户上拉框只显示桌宠摘要，选择、动画、大小、位置和导入操作集中在独立管理窗
@@ -66,7 +69,7 @@ npm run package:dir
 npm run dist:win
 ```
 
-安装包输出到 `dist/DeepSeek-Desktop-Setup-0.7.0-x64.exe`。当前版本未进行代码签名，
+安装包输出到 `dist/DeepSeek-Desktop-Setup-0.8.0-x64.exe`。当前版本未进行代码签名，
 Windows SmartScreen 可能显示“未知发布者”。
 
 ## 数据目录

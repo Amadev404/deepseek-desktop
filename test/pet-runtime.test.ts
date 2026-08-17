@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampPetPosition,
+  defaultPetFrameOffset,
   petFrameAt,
   petAtlasRows,
   petTimeline,
@@ -75,6 +76,12 @@ describe('Codex animation metrics', () => {
     expect(petFrameAt(timeline, 2_460).index).toBe(18)
     expect(petFrameAt(timeline, 2_460 + 1_680).index).toBe(19)
   })
+
+  it('raises only the built-in pet activity cadence to twelve frames per second', () => {
+    const timeline = petTimeline('running-right', true, 'smooth')
+    expect(timeline.steps.map((step) => step.duration)).toEqual([83, 83, 83, 83, 83, 83, 83, 125])
+    expect(petFrameAt(timeline, 83).index).toBe(1)
+  })
 })
 
 describe('pet geometry', () => {
@@ -101,5 +108,12 @@ describe('pet geometry', () => {
     expect(resolvePetDragDirection(0, 8)).toBeUndefined()
     expect(resolvePetDragDirection(4, 0)).toBe('running-right')
     expect(resolvePetDragDirection(-4, 0)).toBe('running-left')
+  })
+
+  it('keeps the built-in whale girl foot anchor stable across atlas frames', () => {
+    expect(defaultPetFrameOffset(6, 0)).toEqual({ x: -2, y: 0 })
+    expect(defaultPetFrameOffset(6, 2)).toEqual({ x: -10, y: 0 })
+    expect(defaultPetFrameOffset(1, 2)).toEqual({ x: -57, y: 0 })
+    expect(defaultPetFrameOffset(9, 0)).toEqual({ x: 0, y: 0 })
   })
 })

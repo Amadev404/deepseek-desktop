@@ -107,6 +107,15 @@ try {
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...dragTarget, button: 'left', buttons: 1 })
     await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'running-left' && document.querySelector('.dsd-pet')?.getAttribute('data-dragging') === 'true'`, 5_000)
+    const draggingSprite = await cdp.evaluate(`(() => {
+      const sprite = document.querySelector('.dsd-petSprite')
+      const style = sprite ? getComputedStyle(sprite) : null
+      return { transform: style?.transform, willChange: style?.willChange }
+    })()`)
+    assert(draggingSprite.transform && draggingSprite.transform !== 'none' && draggingSprite.willChange?.includes('transform'), `built-in pet frame registration is inactive: ${JSON.stringify(draggingSprite)}`)
+    if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
+      await captureScreenshot(cdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'pet-dragging'))
+    }
     const draggedPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: innerWidth, height: innerHeight } : null })()`)
     assert(draggedPetRect && draggedPetRect.x >= 0 && draggedPetRect.y >= 0 && draggedPetRect.right <= draggedPetRect.width && draggedPetRect.bottom <= draggedPetRect.height, `dragged pet left the viewport: ${JSON.stringify(draggedPetRect)}`)
     assert(Math.abs(draggedPetRect.x - initialPetRect.x) > 40, 'dragging did not move the DeepSeek pet')
@@ -235,8 +244,7 @@ try {
     const tree = await processTree(child.pid)
     await cdp.evaluate(`window.deepseekDesktop.quit()`)
     await waitForExit(child, 20_000)
-    await delay(1_500)
-    const lingering = tree.filter(isRunning)
+    const lingering = await waitForTreeExit(tree, 8_000)
     assert(lingering.length === 0, `Desktop process tree is still running: ${lingering.join(', ')}`)
   } finally {
     cdp.close()
@@ -418,6 +426,16 @@ function isRunning(pid) {
   } catch {
     return false
   }
+}
+
+async function waitForTreeExit(tree, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  let lingering = tree.filter(isRunning)
+  while (lingering.length && Date.now() < deadline) {
+    await delay(250)
+    lingering = tree.filter(isRunning)
+  }
+  return lingering
 }
 
 function waitForExit(process, timeoutMs) {

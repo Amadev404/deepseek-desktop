@@ -10,7 +10,7 @@ The packaged `node_modules` tree retains the license files and package metadata 
 
 ## Whale-girl visual assets
 
-DeepSeek Desktop 0.7.0 embeds the following visual assets under the
+DeepSeek Desktop 0.8.0 embeds the following visual assets under the
 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 license. These assets are excluded from the project's MIT License and may only be used under their own terms.
 
@@ -20,7 +20,7 @@ license. These assets are excluded from the project's MIT License and may only b
 
 The bundled DeepSeek pet atlas is a separate MIT-licensed work:
 
-- `packages/companion/assets/deepseek-pet.webp`: 8×11, 1536×2288 DeepSeek whale-girl pet atlas by f0909172434.
+- `packages/companion/assets/deepseek-pet.webp`: adapted 8×11, 1536×2288 DeepSeek whale-girl pet atlas by f0909172434; this release removes detached Alpha residue and clears unused frame cells without redrawing the character art.
 - `licenses/MIT-deepseek-pet.txt`: preserved upstream MIT license for the pet atlas.
 
 Attribution chain for the whale-girl material:
