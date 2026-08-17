@@ -12,6 +12,7 @@ const realHome = process.env.DEEPSEEK_DESKTOP_SMOKE_REAL_HOME === '1'
 const tempRoot = await mkdtemp(join(tmpdir(), 'deepseek-desktop-ui-smoke-'))
 const dshHome = realHome ? process.env.DSH_HOME?.trim() || join(homedir(), '.dsh') : join(tempRoot, '.dsh')
 const electronUserData = join(tempRoot, 'electron-data')
+const petManifestPath = join(tempRoot, 'smoke-custom-pet.json')
 const debugPort = await freePort()
 const output = []
 const startedAt = Date.now()
@@ -25,6 +26,13 @@ try {
     await mkdir(dshHome, { recursive: true })
     await writeFile(join(dshHome, 'settings.yaml'), 'ui-onboarding:\n  welcomeNoticeVersion: 2026-08-13.1\nllm-deepseek:\n  baseURL: https://gateway.example.com\n', 'utf8')
     await writeFile(join(dshHome, '.credentials.yaml'), 'DEEPSEEK_API_KEY: desktop-smoke-placeholder\n', 'utf8')
+    await writeFile(petManifestPath, JSON.stringify({
+      id: 'smoke-custom-pet',
+      displayName: 'Smoke Custom Pet',
+      description: 'Smoke test custom pet',
+      spriteVersionNumber: 2,
+      spritesheetPath: 'spritesheet.webp'
+    }), 'utf8')
   }
   const env = { ...process.env, DSH_HOME: dshHome }
   delete env.ELECTRON_RUN_AS_NODE
@@ -50,9 +58,12 @@ try {
     await waitForEvaluation(cdp, `(() => {
       const portrait = document.querySelector('.dsd-character')
       const avatar = document.querySelector('.dsd-avatarImage')
-      return document.body.dataset.dsdTheme === 'ocean'
+      const pet = document.querySelector('.dsd-pet')
+      const sprite = document.querySelector('.dsd-petSprite')
+      return !document.body.dataset.dsdTheme
         && portrait instanceof HTMLImageElement && portrait.complete && portrait.naturalWidth > 0
         && avatar instanceof HTMLImageElement && avatar.complete && avatar.naturalWidth > 0
+        && pet && sprite && getComputedStyle(sprite).backgroundImage.includes('data:image/webp')
     })()`, 10_000)
 
     const visual = await cdp.evaluate(`(() => {
@@ -60,17 +71,18 @@ try {
       const style = portrait ? getComputedStyle(portrait) : null
       const rect = portrait?.getBoundingClientRect()
       return {
-        theme: document.body.dataset.dsdTheme,
         phase: document.querySelector('[data-phase]')?.getAttribute('data-phase'),
         portraitDisplay: style?.display,
         portraitVisibility: style?.visibility,
         portraitPointerEvents: style?.pointerEvents,
         portraitRight: rect?.right,
-        viewportWidth: innerWidth
+        viewportWidth: innerWidth,
+        petDisplay: getComputedStyle(document.querySelector('.dsd-pet')).display,
+        petPointerEvents: getComputedStyle(document.querySelector('.dsd-pet')).pointerEvents
       }
     })()`)
-    assert(visual.theme === 'ocean', `default theme is not ocean: ${JSON.stringify(visual)}`)
     assert(visual.portraitPointerEvents === 'none', 'portrait accepts pointer input')
+    assert(visual.petDisplay === 'block' && visual.petPointerEvents === 'auto', `DeepSeek pet is not interactive: ${JSON.stringify(visual)}`)
     if (!realHome) {
       assert(visual.phase === 'hero', `isolated Harness did not open on the hero view: ${JSON.stringify(visual)}`)
       assert(visual.portraitDisplay === 'block' && visual.portraitVisibility === 'visible', `portrait is not visible on the wide hero view: ${JSON.stringify(visual)}`)
@@ -82,23 +94,11 @@ try {
     assert(triggerCenter, 'Desktop account trigger is missing')
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...triggerCenter, button: 'left', clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...triggerCenter, button: 'left', clickCount: 1 })
-    await waitForDom(cdp, '.dsd-themeSwitch', 5_000)
-    const themeControls = await cdp.evaluate(`(() => ({
-      labels: [...document.querySelectorAll('.dsd-themeChoice')].map((node) => node.textContent?.trim()),
-      selected: [...document.querySelectorAll('.dsd-themeChoice')].find((node) => node.getAttribute('aria-pressed') === 'true')?.textContent?.trim()
-    }))()`)
-    assert(JSON.stringify(themeControls.labels) === JSON.stringify(['原生', '海洋']), `unexpected theme controls ${JSON.stringify(themeControls)}`)
-    assert(themeControls.selected === '海洋', `ocean theme is not selected: ${JSON.stringify(themeControls)}`)
-
-    await cdp.evaluate(`[...document.querySelectorAll('.dsd-themeChoice')].find((node) => node.textContent?.includes('原生'))?.click()`)
-    await waitForEvaluation(cdp, `document.body.dataset.dsdTheme === 'native' && getComputedStyle(document.querySelector('.dsd-character')).visibility === 'hidden'`, 5_000)
-    await cdp.send('Page.reload')
-    await waitForDom(cdp, '.dsd-trigger', 30_000)
-    await waitForEvaluation(cdp, `document.body.dataset.dsdTheme === 'native'`, 5_000)
-    await cdp.evaluate(`document.querySelector('.dsd-trigger')?.click()`)
-    await waitForDom(cdp, '.dsd-themeSwitch', 5_000)
-    await cdp.evaluate(`[...document.querySelectorAll('.dsd-themeChoice')].find((node) => node.textContent?.includes('海洋'))?.click()`)
-    await waitForEvaluation(cdp, `document.body.dataset.dsdTheme === 'ocean'`, 5_000)
+    await waitForDom(cdp, '.dsd-petSelect', 5_000)
+    await cdp.evaluate(`document.querySelector('.dsd-petToggle input')?.click()`)
+    await waitForEvaluation(cdp, `!document.querySelector('.dsd-pet')`, 5_000)
+    await cdp.evaluate(`document.querySelector('.dsd-petToggle input')?.click()`)
+    await waitForDom(cdp, '.dsd-pet', 5_000)
     await waitForEvaluation(cdp, `(() => {
       const section = document.querySelector('[aria-labelledby="dsd-balance-title"]')
       const text = section?.textContent ?? ''
@@ -107,15 +107,34 @@ try {
         || text.includes('不支持查询官方余额'))
     })()`, 12_000)
 
-    const state = await cdp.evaluate(`(() => ({
+    if (!realHome) {
+      await setFileInputFiles(cdp, 'input[type="file"][accept*="json"]', petManifestPath)
+      await setFileInputFiles(cdp, 'input[type="file"][accept*="webp"]', resolve(root, 'packages', 'companion', 'assets', 'deepseek-pet.webp'))
+      await waitForEvaluation(cdp, `document.querySelector('.dsd-petStatusText')?.textContent?.includes('已添加')`, 15_000)
+      await cdp.send('Page.reload')
+      await waitForDom(cdp, '.dsd-trigger', 30_000)
+      await cdp.evaluate(`document.querySelector('.dsd-trigger')?.click()`)
+      await waitForDom(cdp, '.dsd-petSelect option[value="smoke-custom-pet"]', 10_000)
+      await cdp.evaluate(`(() => { const select = document.querySelector('.dsd-petSelect'); select.value = 'smoke-custom-pet'; select.dispatchEvent(new Event('change', { bubbles: true })) })()`)
+      await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-pet-id') === 'smoke-custom-pet'`, 5_000)
+      await cdp.send('Page.reload')
+      await waitForDom(cdp, '.dsd-trigger', 30_000)
+      await cdp.evaluate(`document.querySelector('.dsd-trigger')?.click()`)
+      await waitForEvaluation(cdp, `document.querySelector('.dsd-petSelect')?.value === 'smoke-custom-pet'`, 10_000)
+      await cdp.evaluate(`window.deepseekDesktop.petStore.remove('smoke-custom-pet')`)
+    }
+
+    const state = await cdp.evaluate(`(async () => ({
       origin: location.origin,
       trigger: Boolean(document.querySelector('.dsd-trigger')),
       expanded: document.querySelector('.dsd-trigger')?.getAttribute('aria-expanded'),
       triggerCount: document.querySelectorAll('.dsd-trigger').length,
       popover: Boolean(document.querySelector('.dsd-popover')),
-      theme: document.body.dataset.dsdTheme,
-      themeCookie: document.cookie.includes('deepseek_desktop_theme=ocean'),
       avatarReady: [...document.querySelectorAll('.dsd-avatarImage')].every((node) => node.complete && node.naturalWidth > 0),
+      pet: Boolean(document.querySelector('.dsd-pet')),
+      petSpriteData: getComputedStyle(document.querySelector('.dsd-petSprite')).backgroundImage.includes('data:image/webp'),
+      petStoreCount: window.deepseekDesktop?.petStore ? (await window.deepseekDesktop.petStore.list()).length : -1,
+      codexPetNodes: document.querySelectorAll('.codex-pet,[data-codex-pet]').length,
       balanceStatus: (() => {
         const section = document.querySelector('[aria-labelledby="dsd-balance-title"]')
         const text = section?.textContent ?? ''
@@ -138,8 +157,10 @@ try {
     assert(state.origin.startsWith('http://127.0.0.1:'), `unexpected renderer origin ${state.origin}`)
     assert(state.trigger, `Desktop account trigger is missing: ${JSON.stringify(state)}`)
     assert(state.popover, `Desktop account popover did not open: ${JSON.stringify(state)}`)
-    assert(state.theme === 'ocean' && state.themeCookie, 'ocean theme was not restored and persisted')
     assert(state.avatarReady, 'whale-girl avatar did not decode')
+    assert(state.pet && state.petSpriteData, 'DeepSeek pet sprite did not decode')
+    assert(state.petStoreCount >= 0, 'DeepSeek pet store bridge did not respond')
+    assert(state.codexPetNodes === 0, 'DeepSeek renderer claimed a Codex pet node')
     if (realHome) {
       assert(state.balanceStatus !== 'unknown', 'real account balance state did not settle')
       assert(state.sessionTreeItems > 0, 'existing Harness sessions are not visible')
@@ -149,7 +170,7 @@ try {
     assert(state.slider, 'reasoning effort slider is missing')
     assert(state.actions.some((text) => text?.includes('设置')), 'settings action is missing')
     assert(state.actions.some((text) => text?.includes('退出')), 'quit action is missing')
-    assert(JSON.stringify(state.bridgeKeys) === JSON.stringify(['quit']), `unexpected preload bridge ${JSON.stringify(state.bridgeKeys)}`)
+    assert(JSON.stringify(state.bridgeKeys) === JSON.stringify(['quit', 'petStore']), `unexpected preload bridge ${JSON.stringify(state.bridgeKeys)}`)
     assert(state.requireType === 'undefined' && state.processType === 'undefined', 'renderer exposes Node.js globals')
     assert(state.webviews === 0, 'renderer contains a WebView')
     if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
@@ -186,7 +207,7 @@ try {
 } finally {
   if (child?.exitCode === null) await killTree(child.pid)
   if (secondChild?.exitCode === null) await killTree(secondChild.pid)
-  await rm(tempRoot, { recursive: true, force: true })
+  await removeTempRoot(tempRoot)
 }
 
 function assert(value, message) {
@@ -229,7 +250,7 @@ async function captureVariants(cdp, screenshotPath) {
   await cdp.evaluate(`document.body.setAttribute('data-ds-dark-theme', '')`)
   await delay(250)
   const darkBackground = await cdp.evaluate(`getComputedStyle(document.body).getPropertyValue('--dsw-alias-bg-base').trim()`)
-  assert(lightBackground !== darkBackground, 'ocean light and dark palettes are identical')
+  assert(lightBackground !== darkBackground, 'Harness light and dark palettes are identical')
   if (screenshotPath) await captureScreenshot(cdp, variantPath(screenshotPath, 'dark'))
   if (!originalDark) await cdp.evaluate(`document.body.removeAttribute('data-ds-dark-theme')`)
 
@@ -256,6 +277,14 @@ async function captureVariants(cdp, screenshotPath) {
 async function captureScreenshot(cdp, path) {
   const capture = await cdp.send('Page.captureScreenshot', { format: 'png' })
   await writeFile(path, Buffer.from(capture.data, 'base64'))
+}
+
+async function setFileInputFiles(cdp, selector, path) {
+  const document = await cdp.send('DOM.getDocument', { depth: 0 })
+  const node = await cdp.send('DOM.querySelector', { nodeId: document.root.nodeId, selector })
+  assert(node.nodeId, `file input is missing: ${selector}`)
+  await cdp.send('DOM.setFileInputFiles', { nodeId: node.nodeId, files: [path] })
+  await cdp.evaluate(`document.querySelector(${JSON.stringify(selector)})?.dispatchEvent(new Event('change', { bubbles: true }))`)
 }
 
 function variantPath(path, variant) {
@@ -311,7 +340,7 @@ function connectCdp(url) {
           awaitPromise: true,
           returnByValue: true
         })
-        if (response.exceptionDetails) throw new Error(response.exceptionDetails.text)
+        if (response.exceptionDetails) throw new Error(response.exceptionDetails.exception?.description ?? response.exceptionDetails.text)
         return response.result.value
       },
       close() {
@@ -360,6 +389,20 @@ function waitForExit(process, timeoutMs) {
 async function killTree(pid) {
   if (!pid) return
   await exec('taskkill.exe', ['/PID', String(pid), '/T', '/F']).catch(() => '')
+}
+
+async function removeTempRoot(path) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    try {
+      await rm(path, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (error?.code !== 'EBUSY' && error?.code !== 'EPERM') throw error
+      await delay(250)
+    }
+  }
+  await rm(path, { recursive: true, force: true })
 }
 
 function exec(file, args) {

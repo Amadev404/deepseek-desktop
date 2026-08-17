@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-desktop/companion",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Desktop-only DeepSeek Harness extensions for DeepSeek Desktop.",
   "type": "module",

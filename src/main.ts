@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { ensureCompanionLink } from './companion-link.js'
 import { startHarness, stopHarness, type RunningHarness } from './harness.js'
+import { registerPetStoreIpc } from './pet-store.js'
 import { chooseHarnessPort, isTrustedHarnessUrl } from './runtime.js'
 
 const PRODUCT_NAME = 'DeepSeek Desktop'
@@ -19,6 +20,7 @@ app.setName(PRODUCT_NAME)
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
+  registerPetStoreIpc(() => mainWindow?.webContents)
   ipcMain.on('deepseek-desktop:quit', (event) => {
     if (event.sender === mainWindow?.webContents) app.quit()
   })

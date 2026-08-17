@@ -10,13 +10,18 @@ The packaged `node_modules` tree retains the license files and package metadata 
 
 ## Whale-girl visual assets
 
-DeepSeek Desktop 0.3.0 embeds the following visual assets under the
+DeepSeek Desktop 0.4.0 embeds the following visual assets under the
 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 license. These assets are excluded from the project's MIT License and may only be used under their own terms.
 
 - `packages/companion/assets/maid-work.webp`: work-themed maid whale-girl standing art, from Small-tailqwq / `dsh-deep-whale`.
 - `packages/companion/assets/whale-avatar.png`: icon preview from fornarwhal / `deepseek-whale-girl-icon`.
 - `build/icon.ico`: multi-size Windows icon from fornarwhal / `deepseek-whale-girl-icon`.
+
+The bundled DeepSeek pet atlas is a separate MIT-licensed work:
+
+- `packages/companion/assets/deepseek-pet.webp`: 8×11, 1536×2288 DeepSeek whale-girl pet atlas by f0909172434.
+- `licenses/MIT-deepseek-pet.txt`: preserved upstream MIT license for the pet atlas.
 
 Attribution chain for the whale-girl material:
 

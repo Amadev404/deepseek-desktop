@@ -16,6 +16,7 @@ import { createPortal } from 'react-dom'
 import type { BalanceResult } from './balance.js'
 import whaleAvatar from '../assets/whale-avatar.png'
 import maidWork from '../assets/maid-work.webp'
+import { PetOverlay, PetSettings, usePetController, type PetUseSessions } from './pet.js'
 
 export const inject = ['connection', 'sessions', 'slots']
 
@@ -52,11 +53,8 @@ type ModelState =
   | { phase: 'error'; value?: SessionModels; error: string }
 
 const BALANCE_PATH = '/deepseek-desktop/api/balance'
-const THEME_COOKIE = 'deepseek_desktop_theme'
-const THEME_MAX_AGE = 31_536_000
 const EMPTY_SUBSCRIBE = (): (() => void) => () => {}
 const EMPTY_SNAPSHOT = (): undefined => undefined
-type ThemeMode = 'native' | 'ocean'
 const CSS = `
 .dsd-root{position:relative;width:100%;min-width:0;margin-bottom:2px}
 .dsd-trigger{box-sizing:border-box;width:100%;height:40px;border:0;border-radius:10px;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;display:flex;align-items:center;gap:9px;padding:0 10px;text-align:left;font:inherit;outline:none}
@@ -109,16 +107,10 @@ const CSS = `
 .dsd-action svg{width:16px;height:16px;color:var(--dsw-alias-label-secondary)}
 .dsd-actionDanger{color:var(--dsw-alias-state-error-primary)}
 .dsd-actionDanger svg{color:currentColor}
-.dsd-themeSwitch{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px;padding:3px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-alias-bg-overlay)}
-.dsd-themeChoice{height:30px;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;outline:none}
-.dsd-themeChoice:hover,.dsd-themeChoice:focus-visible{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
-.dsd-themeChoice[aria-pressed='true']{background:var(--dsw-alias-button-info-fill);color:var(--dsw-alias-label-primary-foreground);box-shadow:var(--dsw-shadow-lv1)}
 .dsd-character{display:block;visibility:hidden;position:fixed;z-index:0;right:max(20px,4vw);bottom:0;width:min(30vw,420px);max-height:78vh;object-fit:contain;object-position:bottom;opacity:0;transform:translateY(6px);pointer-events:none;user-select:none;filter:drop-shadow(0 14px 24px rgba(21,45,83,.16));transition:opacity .16s ease,transform .16s ease,visibility 0s linear .16s}
-body[data-dsd-theme='ocean']:has([data-phase='hero']) .dsd-character{visibility:visible;opacity:.82;transform:none;transition-delay:0s}
-body[data-dsd-theme='ocean']:has([data-phase='hero']) [data-phase='hero']{background:transparent}
-body[data-dsd-theme='ocean']:has([data-phase='hero']) [data-phase='hero'] > *{position:relative;z-index:1}
-body[data-dsd-theme='ocean']:not([data-ds-dark-theme]){--dsw-alias-bg-base:#f5f8fc;--dsw-specific-sidebar-fill:#eaf0f8;--dsw-specific-menu:#ffffff;--dsw-alias-bg-overlay:rgba(73,121,174,.07);--dsw-alias-bg-module-platform:rgba(255,255,255,.7);--dsw-alias-label-primary:#203451;--dsw-alias-label-primary-bluish:#2e5c88;--dsw-alias-label-secondary:#4b6684;--dsw-alias-label-tertiary:#71849a;--dsw-alias-label-caption:#8c9bad;--dsw-alias-border-l2:rgba(63,111,164,.24);--dsw-alias-border-l3:rgba(63,111,164,.42);--dsw-alias-interactive-bg-hover:rgba(63,111,164,.1);--dsw-alias-interactive-bg-hover-solid:#e6eef7;--dsw-alias-button-info-fill:#467eae;--dsw-alias-label-primary-foreground:#ffffff;--dsw-alias-state-business-primary:#467eae}
-body[data-dsd-theme='ocean'][data-ds-dark-theme]{--dsw-alias-bg-base:#101d30;--dsw-specific-sidebar-fill:#13253b;--dsw-specific-menu:#172b43;--dsw-alias-bg-overlay:rgba(130,177,211,.1);--dsw-alias-bg-module-platform:rgba(27,52,77,.7);--dsw-alias-label-primary:#e8f0f6;--dsw-alias-label-primary-bluish:#c9dfed;--dsw-alias-label-secondary:#adc3d3;--dsw-alias-label-tertiary:#8aa2b4;--dsw-alias-label-caption:#6f879b;--dsw-alias-border-l2:rgba(143,187,215,.24);--dsw-alias-border-l3:rgba(143,187,215,.42);--dsw-alias-interactive-bg-hover:rgba(143,187,215,.13);--dsw-alias-interactive-bg-hover-solid:#203d58;--dsw-alias-button-info-fill:#4b8bb5;--dsw-alias-label-primary-foreground:#ffffff;--dsw-alias-state-business-primary:#71b0d1}
+body:has([data-phase='hero']) .dsd-character{visibility:visible;opacity:.82;transform:none;transition-delay:0s}
+body:has([data-phase='hero']) [data-phase='hero']{background:transparent}
+body:has([data-phase='hero']) [data-phase='hero'] > *{position:relative;z-index:1}
 @media(max-width:1179px){.dsd-character{display:none!important}}
 @media(prefers-reduced-motion:reduce){.dsd-popover,.dsd-chevron,.dsd-spin,.dsd-character{animation:none;transition:none}}
 `
@@ -138,7 +130,6 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   const rootRef = useRef<HTMLDivElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [theme, setTheme] = useState<ThemeMode>(() => readTheme())
   const [balance, setBalance] = useState<BalanceResult | undefined>()
   const [balanceLoading, setBalanceLoading] = useState(false)
   const currentId = useSessions((snapshot) => snapshot.current)
@@ -146,13 +137,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   const reasoning = useProjection<ReasoningUsageProjection>(sessions, currentId, 'desktopReasoningUsage')
   const [models, setModels] = useState<ModelState>({ phase: 'idle' })
   const modelGeneration = useRef(0)
-
-  useEffect(() => {
-    applyTheme(theme)
-    return () => {
-      if (document.body.dataset.dsdTheme === theme) delete document.body.dataset.dsdTheme
-    }
-  }, [theme])
+  const pet = usePetController()
 
   const loadBalance = useCallback(async (force = false) => {
     if (!force && balance?.status === 'ready' && Date.now() - balance.fetchedAt < 5 * 60_000) return
@@ -241,6 +226,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   return (
     <>
       {createPortal(<img className="dsd-character" src={maidWork} alt="" aria-hidden="true" />, document.body)}
+      <PetOverlay controller={pet} useSessions={useSessions as PetUseSessions} />
       <div className="dsd-root" ref={rootRef}>
         <button
           type="button"
@@ -268,13 +254,7 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
           </span>
         </div>
 
-        <section className="dsd-section" aria-labelledby="dsd-theme-title">
-          <div className="dsd-sectionTitle" id="dsd-theme-title"><Glyph kind="palette" />外观</div>
-          <div className="dsd-themeSwitch" role="radiogroup" aria-label="外观主题">
-            <button type="button" className="dsd-themeChoice" aria-pressed={theme === 'native'} onClick={() => setTheme('native')}>原生</button>
-            <button type="button" className="dsd-themeChoice" aria-pressed={theme === 'ocean'} onClick={() => setTheme('ocean')}>海洋</button>
-          </div>
-        </section>
+        <PetSettings controller={pet} />
 
         <section className="dsd-section" aria-labelledby="dsd-balance-title">
           <div className="dsd-sectionTitle" id="dsd-balance-title">
@@ -418,21 +398,6 @@ function modelStatus(state: ModelState): string {
   return '未提供'
 }
 
-function readTheme(): ThemeMode {
-  if (typeof document === 'undefined') return 'ocean'
-  const value = document.cookie
-    .split(';')
-    .map((entry) => entry.trim())
-    .find((entry) => entry.startsWith(`${THEME_COOKIE}=`))
-    ?.slice(THEME_COOKIE.length + 1)
-  return value === 'native' ? 'native' : 'ocean'
-}
-
-function applyTheme(theme: ThemeMode): void {
-  document.body.dataset.dsdTheme = theme
-  document.cookie = `${THEME_COOKIE}=${theme}; Max-Age=${THEME_MAX_AGE}; Path=/; SameSite=Strict`
-}
-
 function balanceError(kind: Extract<BalanceResult, { status: 'error' }>['kind']): string {
   if (kind === 'unauthorized') return 'API Key 无效，无法读取余额。'
   if (kind === 'forbidden') return '当前 API Key 无权读取余额。'
@@ -493,11 +458,10 @@ function installStyles(): void {
   document.head.appendChild(style)
 }
 
-function Glyph({ kind, className }: { kind: 'chart' | 'chevron' | 'palette' | 'power' | 'refresh' | 'settings' | 'spark' | 'wallet'; className?: string }): ReactNode {
+function Glyph({ kind, className }: { kind: 'chart' | 'chevron' | 'power' | 'refresh' | 'settings' | 'spark' | 'wallet'; className?: string }): ReactNode {
   const paths: Record<typeof kind, ReactNode> = {
     chart: <><path d="M4 18V9"/><path d="M10 18V5"/><path d="M16 18v-7"/></>,
     chevron: <path d="m5 8 5 5 5-5"/>,
-    palette: <><path d="M10 3a7 7 0 1 0 0 14h1.2a1.8 1.8 0 0 0 0-3.6H10a1.5 1.5 0 0 1 0-3h3.5A3.5 3.5 0 0 0 17 7.9 6.9 6.9 0 0 0 10 3Z"/><circle cx="6.8" cy="8" r=".7" fill="currentColor" stroke="none"/><circle cx="9" cy="6.2" r=".7" fill="currentColor" stroke="none"/><circle cx="12" cy="6" r=".7" fill="currentColor" stroke="none"/></>,
     power: <><path d="M10 3v8"/><path d="M6.1 5.5a7 7 0 1 0 7.8 0"/></>,
     refresh: <><path d="M17 7V3l-1.8 1.8A7 7 0 1 0 17 12"/><path d="M17 3h-4"/></>,
     settings: <><circle cx="10" cy="10" r="2.4"/><path d="M16.2 11.7l1.2 1-.9 1.6-1.5-.5a6.7 6.7 0 0 1-1.4.8l-.3 1.6h-1.8l-.3-1.6a6.7 6.7 0 0 1-1.4-.8l-1.5.5-.9-1.6 1.2-1a6.8 6.8 0 0 1 0-1.6l-1.2-1 .9-1.6 1.5.5a6.7 6.7 0 0 1 1.4-.8l.3-1.6h1.8l.3 1.6a6.7 6.7 0 0 1 1.4.8l1.5-.5.9 1.6-1.2 1a6.8 6.8 0 0 1 0 1.6Z"/></>,
