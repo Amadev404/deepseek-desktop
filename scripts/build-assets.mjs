@@ -58,7 +58,10 @@ await build({
 })
 
 const manifest = JSON.parse(await readFile(resolve(companion, 'package.json'), 'utf8'))
-if (manifest.version !== '0.6.0') throw new Error('Companion version must match DeepSeek Desktop 0.6.0.')
+const desktopManifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
+if (manifest.version !== desktopManifest.version) {
+  throw new Error(`Companion version ${manifest.version} must match DeepSeek Desktop ${desktopManifest.version}.`)
+}
 
 function indent(value, spaces) {
   const prefix = ' '.repeat(spaces)

@@ -16,7 +16,7 @@ import {
   petFrameAt,
   petAtlasRows,
   petTimeline,
-  primaryAnimationDuration,
+  resolvePetDragDirection,
   resolvePetLookIndex,
   selectPetSessionSignal,
   PET_FRAME_HEIGHT,
@@ -34,7 +34,6 @@ const PET_COOKIE_MAX_AGE = 31_536_000
 const DEFAULT_PET_ID = 'deepseek-whale-girl'
 const MAX_SPRITESHEET_BYTES = 12 * 1024 * 1024
 const COMPLETION_NOTICE_MS = 8_000
-const DRAG_SETTLE_MS = 540
 
 export type PetUseSessions = <T>(selector: (state: PetSessionSnapshot) => T) => T
 
@@ -78,15 +77,8 @@ interface PetDraft {
   }
 }
 
-interface PetAction {
-  key: number
-  mode: 'jumping' | 'waving'
-}
-
 interface PetDrag {
-  direction: 'running-left' | 'running-right'
-  x: number
-  y: number
+  direction?: 'running-left' | 'running-right'
 }
 
 const DEFAULT_PET: PetRecord = {
@@ -251,17 +243,15 @@ export function PetOverlay({
 }): ReactNode {
   const signal = useSessions((state) => selectPetSessionSignal(state, hasCurrentError))
   const [completion, setCompletion] = useState<PetSignal>()
-  const [action, setAction] = useState<PetAction>()
-  const [settle, setSettle] = useState<Extract<PetMode, 'running-left' | 'running-right'>>()
+  const [hovered, setHovered] = useState(false)
   const [drag, setDrag] = useState<PetDrag>()
   const [lookIndex, setLookIndex] = useState<number>()
+  const [dismissedReviewKey, setDismissedReviewKey] = useState<string>()
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
   const buttonRef = useRef<HTMLButtonElement>(null)
   const previousSignal = useRef(signal)
-  const actionKey = useRef(0)
-  const actionTimer = useRef<number>()
   const completionTimer = useRef<number>()
-  const settleTimer = useRef<number>()
+  const reviewTimer = useRef<number>()
   const dragFrame = useRef<number>()
   const dragRef = useRef<{
     offsetX: number
@@ -270,8 +260,10 @@ export function PetOverlay({
     startX: number
     startY: number
     lastX: number
+    lastY: number
     moved: boolean
-    direction: 'running-left' | 'running-right'
+    direction?: 'running-left' | 'running-right'
+    origin: PetPoint
     point?: PetPoint
   }>()
   const suppressClick = useRef(false)
@@ -288,17 +280,35 @@ export function PetOverlay({
       } satisfies PetSignal
       setCompletion(review)
       if (completionTimer.current !== undefined) window.clearTimeout(completionTimer.current)
-      completionTimer.current = window.setTimeout(() => setCompletion(undefined), COMPLETION_NOTICE_MS)
+      completionTimer.current = window.setTimeout(() => {
+        completionTimer.current = undefined
+        setCompletion(undefined)
+      }, COMPLETION_NOTICE_MS)
     } else if (signal.mode !== 'idle') {
+      if (completionTimer.current !== undefined) window.clearTimeout(completionTimer.current)
+      completionTimer.current = undefined
+      if (signal.mode !== 'review' && reviewTimer.current !== undefined) window.clearTimeout(reviewTimer.current)
+      if (signal.mode !== 'review') {
+        reviewTimer.current = undefined
+        setDismissedReviewKey(undefined)
+      }
       setCompletion(undefined)
-      setSettle(undefined)
+      setHovered(false)
     }
   }, [signal.key, signal.mode, signal.sessionId])
 
+  useEffect(() => {
+    if (signal.mode !== 'review' || dismissedReviewKey === signal.key) return
+    if (reviewTimer.current !== undefined) window.clearTimeout(reviewTimer.current)
+    reviewTimer.current = window.setTimeout(() => {
+      reviewTimer.current = undefined
+      setDismissedReviewKey(signal.key)
+    }, COMPLETION_NOTICE_MS)
+  }, [dismissedReviewKey, signal.key, signal.mode])
+
   useEffect(() => () => {
-    if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
     if (completionTimer.current !== undefined) window.clearTimeout(completionTimer.current)
-    if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
+    if (reviewTimer.current !== undefined) window.clearTimeout(reviewTimer.current)
     if (dragFrame.current !== undefined) window.cancelAnimationFrame(dragFrame.current)
   }, [])
 
@@ -308,17 +318,15 @@ export function PetOverlay({
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const baseSignal = signal.mode === 'idle' && completion !== undefined ? completion : signal
-  const startAction = useCallback((mode: PetAction['mode']) => {
-    if (baseSignal.mode !== 'idle' || dragRef.current !== undefined || settle !== undefined) return
-    if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
-    const next = { mode, key: ++actionKey.current }
-    setAction(next)
-    actionTimer.current = window.setTimeout(() => setAction(undefined), primaryAnimationDuration(mode))
-  }, [baseSignal.mode, settle])
+  const effectiveSignal = signal.mode === 'review' && dismissedReviewKey === signal.key
+    ? { mode: 'idle', key: `idle:dismissed:${signal.key}`, label: '待机中' } satisfies PetSignal
+    : signal
+  const baseSignal = effectiveSignal.mode === 'idle' && completion !== undefined ? completion : effectiveSignal
+  const pointerLookEnabled = controller.selectedPet.id !== DEFAULT_PET_ID
+    && controller.selectedPet.spriteVersionNumber === 2
 
   useEffect(() => {
-    if (controller.selectedPet.spriteVersionNumber !== 2 || !controller.settings.animated || baseSignal.mode !== 'idle' || action !== undefined || drag !== undefined) {
+    if (!pointerLookEnabled || !controller.settings.animated || baseSignal.mode !== 'idle' || hovered || drag !== undefined) {
       setLookIndex(undefined)
       return undefined
     }
@@ -338,32 +346,31 @@ export function PetOverlay({
       window.removeEventListener('pointermove', onPointerMove)
       if (idleTimer !== undefined) window.clearTimeout(idleTimer)
     }
-  }, [action, baseSignal.mode, controller.selectedPet.spriteVersionNumber, controller.settings.animated, drag])
+  }, [baseSignal.mode, controller.settings.animated, drag, hovered, pointerLookEnabled])
 
   const scale = controller.settings.scale
   const petSize = { width: PET_FRAME_WIDTH * scale, height: PET_FRAME_HEIGHT * scale }
   const savedPosition = controller.settings.x === undefined || controller.settings.y === undefined
     ? undefined
     : clampPetPosition({ x: controller.settings.x, y: controller.settings.y }, petSize, viewport)
-  const visiblePosition = drag ?? savedPosition
-  const mode: PetMode = drag?.direction ?? settle ?? (baseSignal.mode === 'idle' && action !== undefined ? action.mode : baseSignal.mode)
-  const frame = usePetFrame(mode, drag !== undefined, `${controller.selectedPet.id}:${baseSignal.key}:${action?.key ?? 0}:${drag?.direction ?? ''}:${settle ?? ''}`, controller.settings.animated)
-  const looking = lookIndex !== undefined && mode === 'idle' && controller.selectedPet.spriteVersionNumber === 2
-  const row = looking ? 9 + Math.floor(lookIndex / 8) : frame.row
+  const hoverMode: PetMode = hovered && baseSignal.mode === 'idle' ? 'jumping' : baseSignal.mode
+  const mode: PetMode = drag?.direction ?? hoverMode
+  const frame = usePetFrame(mode, drag?.direction !== undefined, `${controller.selectedPet.id}:${baseSignal.key}:${hovered}:${drag?.direction ?? ''}`, controller.settings.animated)
+  const looking = lookIndex !== undefined && mode === 'idle' && pointerLookEnabled
+  const calmFrameRow = controller.selectedPet.id === DEFAULT_PET_ID && frame.row === 0 ? 6 : frame.row
+  const row = looking ? 9 + Math.floor(lookIndex / 8) : calmFrameRow
   const column = looking ? lookIndex % 8 : frame.column
   const attention = baseSignal.mode === 'failed' || baseSignal.mode === 'review' || baseSignal.mode === 'waiting'
   const label = drag !== undefined
     ? '正在移动'
-    : action?.mode === 'waving'
-      ? '向你挥手'
-      : action?.mode === 'jumping'
-        ? '开心跳跃'
-        : baseSignal.label
+    : hovered && baseSignal.mode === 'idle'
+      ? '开心跳跃'
+      : baseSignal.label
   const style = {
     '--dsd-pet-scale': String(scale),
-    ...(visiblePosition === undefined
+    ...(savedPosition === undefined
       ? {}
-      : { left: `${visiblePosition.x}px`, top: `${visiblePosition.y}px`, right: 'auto', bottom: 'auto' })
+      : { left: `${savedPosition.x}px`, top: `${savedPosition.y}px`, right: 'auto', bottom: 'auto' })
   } as unknown as CSSProperties
   const spriteStyle = {
     backgroundImage: `url(${controller.selectedPet.spritesheetDataUrl})`,
@@ -377,10 +384,7 @@ export function PetOverlay({
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>): void => {
     if (event.button !== 0) return
-    if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
-    setSettle(undefined)
-    if (actionTimer.current !== undefined) window.clearTimeout(actionTimer.current)
-    setAction(undefined)
+    setHovered(false)
     const rect = event.currentTarget.getBoundingClientRect()
     dragRef.current = {
       offsetX: event.clientX - rect.left,
@@ -389,9 +393,11 @@ export function PetOverlay({
       startX: event.clientX,
       startY: event.clientY,
       lastX: event.clientX,
+      lastY: event.clientY,
       moved: false,
-      direction: 'running-right'
+      origin: { x: rect.left, y: rect.top }
     }
+    setDrag({})
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
@@ -402,15 +408,22 @@ export function PetOverlay({
     state.moved = moved
     if (!moved) return
     const deltaX = event.clientX - state.lastX
-    if (deltaX !== 0) state.direction = deltaX < 0 ? 'running-left' : 'running-right'
-    state.lastX = event.clientX
+    const deltaY = event.clientY - state.lastY
+    const direction = resolvePetDragDirection(deltaX, deltaY)
+    if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 4) {
+      state.lastX = event.clientX
+      state.lastY = event.clientY
+      if (direction !== undefined) state.direction = direction
+    }
     const point = clampPetPosition({ x: event.clientX - state.offsetX, y: event.clientY - state.offsetY }, petSize, viewport)
     state.point = point
     if (dragFrame.current === undefined) {
       dragFrame.current = window.requestAnimationFrame(() => {
         dragFrame.current = undefined
         const next = dragRef.current
-        if (next?.moved && next.point !== undefined) setDrag({ ...next.point, direction: next.direction })
+        if (!next?.moved || next.point === undefined) return
+        applyPetPosition(buttonRef.current, next.point)
+        setDrag((current) => current?.direction === next.direction ? current : { direction: next.direction })
       })
     }
   }
@@ -420,7 +433,6 @@ export function PetOverlay({
     if (!state || state.pointerId !== event.pointerId) return
     suppressClick.current = state.moved
     const moved = state.moved
-    const direction = state.direction
     const point = state.point
     dragRef.current = undefined
     if (dragFrame.current !== undefined) {
@@ -429,13 +441,10 @@ export function PetOverlay({
     }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
     if (persist && moved && point !== undefined) {
+      applyPetPosition(event.currentTarget, point)
       controller.setPosition(point)
-      setSettle(direction)
-      if (settleTimer.current !== undefined) window.clearTimeout(settleTimer.current)
-      settleTimer.current = window.setTimeout(() => {
-        settleTimer.current = undefined
-        setSettle(undefined)
-      }, DRAG_SETTLE_MS)
+    } else if (!persist && moved) {
+      applyPetPosition(event.currentTarget, state.origin)
     }
     setDrag(undefined)
   }
@@ -465,14 +474,15 @@ export function PetOverlay({
         }
         if (baseSignal.mode === 'review' && baseSignal.sessionId !== undefined) {
           openSession(baseSignal.sessionId)
+          setDismissedReviewKey(baseSignal.key)
           setCompletion(undefined)
           return
         }
-        startAction('jumping')
       }}
       onPointerCancel={(event) => finishDrag(event, false)}
       onPointerDown={onPointerDown}
-      onPointerEnter={() => startAction('waving')}
+      onPointerEnter={() => { if (dragRef.current === undefined) setHovered(true) }}
+      onPointerLeave={() => setHovered(false)}
       onPointerMove={onPointerMove}
       onPointerUp={(event) => finishDrag(event, true)}
     >
@@ -481,6 +491,14 @@ export function PetOverlay({
     </button>,
     document.body
   )
+}
+
+function applyPetPosition(element: HTMLElement | null, point: PetPoint): void {
+  if (!element) return
+  element.style.left = `${point.x}px`
+  element.style.top = `${point.y}px`
+  element.style.right = 'auto'
+  element.style.bottom = 'auto'
 }
 
 export function PetSettings({ controller }: { controller: PetController }): ReactNode {
@@ -585,6 +603,7 @@ function petPreviewStyle(pet: PetRecord, width: number): CSSProperties {
   const scale = width / PET_FRAME_WIDTH
   return {
     backgroundImage: `url(${pet.spritesheetDataUrl})`,
+    backgroundPosition: pet.id === DEFAULT_PET_ID ? `0 ${-(6 * PET_FRAME_HEIGHT * scale)}px` : '0 0',
     backgroundSize: `${1536 * scale}px ${petAtlasRows(pet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`
   }
 }

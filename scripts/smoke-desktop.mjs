@@ -94,12 +94,14 @@ try {
     assert(initialPetRect, 'DeepSeek pet does not have a layout box')
     const petCenter = { x: initialPetRect.x + initialPetRect.width / 2, y: initialPetRect.y + initialPetRect.height / 2 }
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...petCenter })
-    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'waving'`, 5_000)
+    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'jumping'`, 5_000)
+    assert(await cdp.evaluate(`document.querySelector('.dsd-pet')?.getAttribute('data-looking') === 'false'`), 'built-in DeepSeek pet unexpectedly tracks the global pointer')
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 })
     await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+    assert(await cdp.evaluate(`document.querySelector('.dsd-pet')?.getAttribute('data-row') === '6'`), 'built-in DeepSeek pet did not use the calm idle row')
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...petCenter, button: 'left', buttons: 0, clickCount: 1 })
-    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'jumping'`, 5_000)
-    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+    assert(await cdp.evaluate(`document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`), 'click leaked a transient pet action')
 
     const dragTarget = { x: petCenter.x - 90, y: petCenter.y - 24 }
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
@@ -110,8 +112,7 @@ try {
     assert(Math.abs(draggedPetRect.x - initialPetRect.x) > 40, 'dragging did not move the DeepSeek pet')
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...dragTarget, button: 'left', buttons: 0, clickCount: 1 })
     await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-dragging') === 'false' && document.cookie.includes('deepseek_desktop_pet_settings')`, 5_000)
-    await waitForEvaluation(cdp, `['running-left', 'running-right'].includes(document.querySelector('.dsd-pet')?.getAttribute('data-mode'))`, 2_000)
-    await waitForEvaluation(cdp, `document.querySelector('.dsd-pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
+    assert(await cdp.evaluate(`!['running-left', 'running-right'].includes(document.querySelector('.dsd-pet')?.getAttribute('data-mode'))`), 'directional running leaked past drag release')
     await cdp.send('Page.reload')
     await waitForDom(cdp, '.dsd-pet', 30_000)
     const persistedPetRect = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y } : null })()`)

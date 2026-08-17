@@ -112,6 +112,7 @@ export function selectPetSessionSignal(state: PetSessionSnapshot, hasCurrentErro
       sessionId: completed
     }
   }
+
   return { mode: 'idle', key: `idle:${currentId ?? ''}`, label: '待机中' }
 }
 
@@ -150,6 +151,13 @@ export function resolvePetLookIndex(dx: number, dy: number, deadzone = 6): numbe
   if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.hypot(dx, dy) <= deadzone) return undefined
   const clockwiseFromUp = (Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360
   return Math.round(clockwiseFromUp / 22.5) % 16
+}
+
+export function resolvePetDragDirection(dx: number, dy: number, threshold = 4): 'running-left' | 'running-right' | undefined {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.max(Math.abs(dx), Math.abs(dy)) < threshold) return undefined
+  if (dx >= threshold) return 'running-right'
+  if (dx <= -threshold) return 'running-left'
+  return undefined
 }
 
 export function clampPetPosition(

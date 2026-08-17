@@ -10,7 +10,7 @@ The packaged `node_modules` tree retains the license files and package metadata 
 
 ## Whale-girl visual assets
 
-DeepSeek Desktop 0.6.0 embeds the following visual assets under the
+DeepSeek Desktop 0.7.0 embeds the following visual assets under the
 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 license. These assets are excluded from the project's MIT License and may only be used under their own terms.
 

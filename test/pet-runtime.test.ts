@@ -5,6 +5,7 @@ import {
   petAtlasRows,
   petTimeline,
   primaryAnimationDuration,
+  resolvePetDragDirection,
   resolvePetLookIndex,
   selectPetSessionSignal
 } from '../packages/companion/src/pet-runtime.js'
@@ -93,5 +94,12 @@ describe('pet geometry', () => {
       { width: 192, height: 208 },
       { width: 1_000, height: 700 }
     )).toEqual({ x: 8, y: 484 })
+  })
+
+  it('matches the Codex four-pixel directional drag threshold', () => {
+    expect(resolvePetDragDirection(3, 0)).toBeUndefined()
+    expect(resolvePetDragDirection(0, 8)).toBeUndefined()
+    expect(resolvePetDragDirection(4, 0)).toBe('running-right')
+    expect(resolvePetDragDirection(-4, 0)).toBe('running-left')
   })
 })
