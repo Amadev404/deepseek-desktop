@@ -181,6 +181,7 @@ try {
       }
     })})`)
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-activity-visible') === 'true' && document.querySelector('#pet')?.getAttribute('data-activity-expanded') === 'true'`, 5_000)
+    assert(await petCdp.evaluate(`!document.querySelector('#activity-pulse')`), 'removed activity pulse control is still rendered')
     const runningCard = await petCdp.evaluate(`(() => {
       const card = document.querySelector('#activity-card')
       const rect = card?.getBoundingClientRect()
@@ -194,6 +195,19 @@ try {
     })()`)
     assert(runningCard.context === runningContext && runningCard.label === '正在思考', `running task card content is wrong: ${JSON.stringify(runningCard)}`)
     assert(runningCard.rect && runningCard.rect.left >= 0 && runningCard.rect.top >= 0 && runningCard.rect.right <= runningCard.viewport.width && runningCard.rect.bottom <= runningCard.viewport.height, `running task card is clipped: ${JSON.stringify(runningCard)}`)
+    const runningPetRect = await petCdp.evaluate(`(() => { const rect = document.querySelector('#pet')?.getBoundingClientRect(); return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null })()`)
+    assert(runningPetRect, 'running desktop pet does not have a layout box')
+    const runningPetCenter = { x: runningPetRect.x + runningPetRect.width / 2, y: runningPetRect.y + runningPetRect.height / 2 }
+    const runningDragTarget = { x: runningPetCenter.x + 70, y: runningPetCenter.y - 18 }
+    const runningWindowBeforeDrag = await petCdp.evaluate(`({ x: window.screenX, y: window.screenY })`)
+    await petCdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...runningPetCenter, button: 'left', buttons: 1, clickCount: 1 })
+    await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...runningDragTarget, button: 'left', buttons: 1 })
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-dragging') === 'true' && document.querySelector('#pet')?.getAttribute('data-activity-visible') === 'true' && getComputedStyle(document.querySelector('#activity-card')).display === 'flex'`, 5_000)
+    assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-status-visible') === 'false'`), 'legacy moving status is visible over the running task card')
+    await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...runningDragTarget, button: 'left', buttons: 0, clickCount: 1 })
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-dragging') === 'false'`, 5_000)
+    const runningWindowAfterDrag = await petCdp.evaluate(`({ x: window.screenX, y: window.screenY })`)
+    assert(Math.abs(runningWindowAfterDrag.x - runningWindowBeforeDrag.x) > 30, `running task card drag did not move the desktop pet window: ${JSON.stringify({ runningWindowBeforeDrag, runningWindowAfterDrag })}`)
     await petCdp.evaluate(`document.querySelector('#activity-toggle')?.click()`)
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-activity-expanded') === 'false' && getComputedStyle(document.querySelector('#activity-card')).display === 'none'`, 5_000)
     await petCdp.evaluate(`document.querySelector('#activity-toggle')?.click()`)
