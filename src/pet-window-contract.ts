@@ -21,6 +21,7 @@ export type DesktopPetMode =
   | 'review'
 
 export interface DesktopPetSignal {
+  context?: string
   mode: DesktopPetMode
   key: string
   label: string

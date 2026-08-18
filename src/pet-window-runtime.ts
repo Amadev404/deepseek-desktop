@@ -3,17 +3,17 @@ import type { PetStatusPlacement } from './pet-window-contract.js'
 import { PET_STAGE_PADDING, petSpriteGeometry, type PetSpriteVersion } from './pet-sprite.js'
 
 export const PET_WINDOW_WIDTH = 512
-export const PET_WINDOW_HEIGHT = 544
-export const PET_SPRITE_TOP = 56
+export const PET_WINDOW_HEIGHT = 660
+export const PET_SPRITE_TOP = 130
 
 const EDGE_MARGIN = 10
 const MIN_ROW_OFFSET_X = -42
 const MAX_ROW_OFFSET_X = 31
 const SPRITE_SHAPE_PADDING = 32
 const STATUS_SHAPE_MARGIN_X = 24
-const STATUS_SHAPE_HEIGHT = 56
-const STATUS_ABOVE_SHAPE_HEIGHT = 80
-const STATUS_VISUAL_EXTENT = 50
+const STATUS_SHAPE_HEIGHT = 144
+const STATUS_ABOVE_SHAPE_HEIGHT = 130
+const STATUS_VISUAL_EXTENT = 124
 
 export interface Point {
   x: number

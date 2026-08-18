@@ -73,6 +73,13 @@ describe('desktop pet window geometry', () => {
     }
   })
 
+  it('reserves enough native space for the expanded running task card', () => {
+    const [, above] = petWindowShape(1.15, 'above')
+    const [, below] = petWindowShape(1.15, 'below')
+    expect(above.height).toBeGreaterThanOrEqual(120)
+    expect(below.height).toBeGreaterThanOrEqual(120)
+  })
+
   it('moves the status label above the pet at the bottom work-area edge', () => {
     const bottom = clampPetWindowPosition({ x: 0, y: 10_000 }, workArea, 1.15)
     const top = clampPetWindowPosition({ x: 0, y: -10_000 }, workArea, 1.15)

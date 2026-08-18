@@ -6,6 +6,7 @@ import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const builtInPetDataUrl = `data:image/webp;base64,${(await readFile(join(root, 'packages', 'companion', 'assets', 'deepseek-pet.webp'))).toString('base64')}`
 const executablePath = process.env.DEEPSEEK_DESKTOP_EXECUTABLE || join(root, 'node_modules', 'electron', 'dist', 'electron.exe')
 const appArguments = process.env.DEEPSEEK_DESKTOP_EXECUTABLE ? [] : [root]
 const realHome = process.env.DEEPSEEK_DESKTOP_SMOKE_REAL_HOME === '1'
@@ -158,7 +159,48 @@ try {
     const movedWindow = await petCdp.evaluate(`({ x: window.screenX, y: window.screenY })`)
     assert(Math.abs(movedWindow.x - initialWindow.x) > 40, `dragging did not move the desktop pet window: ${JSON.stringify({ initialWindow, movedWindow })}`)
     const persistedPosition = await waitForJson(join(electronUserData, 'deepseek-pet-window.json'), 5_000)
-    assert(Math.abs(persistedPosition.x - movedWindow.x) < 3 && Math.abs(persistedPosition.y - movedWindow.y) < 3 && persistedPosition.layoutVersion === 2, `desktop pet position did not persist: ${JSON.stringify({ persistedPosition, movedWindow })}`)
+    assert(Math.abs(persistedPosition.x - movedWindow.x) < 3 && Math.abs(persistedPosition.y - movedWindow.y) < 3 && persistedPosition.layoutVersion === 3, `desktop pet position did not persist: ${JSON.stringify({ persistedPosition, movedWindow })}`)
+
+    const runningContext = 'C:\\Users\\1\\Desktop\\deepseek 桌面端素材'
+    await cdp.evaluate(`window.deepseekDesktop.petOverlay.sync(${JSON.stringify({
+      animated: true,
+      enabled: true,
+      pet: {
+        id: 'deepseek-whale-girl',
+        displayName: '鲸鱼娘',
+        spriteVersionNumber: 1,
+        spritesheetDataUrl: builtInPetDataUrl
+      },
+      scale: 1.15,
+      signal: {
+        mode: 'running',
+        key: 'smoke-running-card',
+        label: '正在思考',
+        context: runningContext,
+        sessionId: 'smoke-running-session'
+      }
+    })})`)
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-activity-visible') === 'true' && document.querySelector('#pet')?.getAttribute('data-activity-expanded') === 'true'`, 5_000)
+    const runningCard = await petCdp.evaluate(`(() => {
+      const card = document.querySelector('#activity-card')
+      const rect = card?.getBoundingClientRect()
+      return {
+        context: document.querySelector('#activity-context')?.textContent,
+        label: document.querySelector('#activity-label')?.textContent,
+        placement: document.querySelector('#pet')?.getAttribute('data-status-placement'),
+        rect: rect ? { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom } : null,
+        viewport: { width: innerWidth, height: innerHeight }
+      }
+    })()`)
+    assert(runningCard.context === runningContext && runningCard.label === '正在思考', `running task card content is wrong: ${JSON.stringify(runningCard)}`)
+    assert(runningCard.rect && runningCard.rect.left >= 0 && runningCard.rect.top >= 0 && runningCard.rect.right <= runningCard.viewport.width && runningCard.rect.bottom <= runningCard.viewport.height, `running task card is clipped: ${JSON.stringify(runningCard)}`)
+    await petCdp.evaluate(`document.querySelector('#activity-toggle')?.click()`)
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-activity-expanded') === 'false' && getComputedStyle(document.querySelector('#activity-card')).display === 'none'`, 5_000)
+    await petCdp.evaluate(`document.querySelector('#activity-toggle')?.click()`)
+    await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-activity-expanded') === 'true'`, 5_000)
+    if (!realHome && process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT) {
+      await captureScreenshot(petCdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'pet-window-running'))
+    }
 
     const triggerCenter = await cdp.evaluate(`(() => { const rect = document.querySelector('.dsd-trigger')?.getBoundingClientRect(); return rect ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null })()`)
     assert(triggerCenter, 'Desktop account trigger is missing')

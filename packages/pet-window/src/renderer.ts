@@ -32,6 +32,8 @@ const pet = requiredElement<HTMLButtonElement>('pet')
 const stage = requiredElement<HTMLSpanElement>('stage')
 const sprite = requiredElement<HTMLSpanElement>('sprite')
 const status = requiredElement<HTMLSpanElement>('status')
+const activityContext = requiredElement<HTMLSpanElement>('activity-context')
+const activityLabel = requiredElement<HTMLSpanElement>('activity-label')
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
 let snapshot: DesktopPetSnapshot | undefined
@@ -52,6 +54,7 @@ let noticeTimer = 0
 let lookTimer = 0
 let lookIndex: number | undefined
 let lastStatusPlacement: PetStatusPlacement = 'hidden'
+let activityExpanded = true
 
 installStyles()
 
@@ -60,6 +63,7 @@ bridge.onSnapshot((value) => {
   const rawChanged = rawSignal.key !== previousRawSignal.key || rawSignal.mode !== previousRawSignal.mode
   snapshot = value
   if (rawChanged) {
+    if (rawSignal.mode === 'running') activityExpanded = true
     window.clearTimeout(noticeTimer)
     if (previousRawSignal.mode === 'running' && rawSignal.mode === 'idle') {
       displayedSignal = {
@@ -82,7 +86,9 @@ bridge.onSnapshot((value) => {
 })
 
 pet.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 || !snapshot?.enabled) return
+  if (event.button !== 0
+    || !snapshot?.enabled
+    || (event.target instanceof Element && event.target.closest('#activity-controls, #activity-card'))) return
   hovered = false
   dragging = true
   dragMoved = false
@@ -130,9 +136,19 @@ pet.addEventListener('pointerleave', () => {
   hovered = false
   render(true)
 })
-pet.addEventListener('click', () => {
+pet.addEventListener('click', (event) => {
   if (dragMoved) {
     dragMoved = false
+    return
+  }
+  const target = event.target instanceof Element ? event.target : undefined
+  if (target?.closest('#activity-toggle')) {
+    activityExpanded = !activityExpanded
+    render(true)
+    return
+  }
+  if (target?.closest('#activity-card, #activity-pulse')) {
+    bridge.activate(displayedSignal.sessionId)
     return
   }
   if (displayedSignal.mode === 'review') {
@@ -194,11 +210,21 @@ function render(resetAnimation: boolean): void {
   pet.dataset.mode = currentMode()
   pet.dataset.petId = snapshot.pet.id
   pet.dataset.attention = String(['failed', 'waiting', 'review'].includes(displayedSignal.mode))
-  pet.dataset.statusVisible = String(dragging || hovered || pet.dataset.attention === 'true')
+  const activityVisible = displayedSignal.mode === 'running' && !dragging
+  pet.dataset.activityVisible = String(activityVisible)
+  pet.dataset.activityExpanded = String(activityExpanded)
+  pet.dataset.statusVisible = String(dragging || (!activityVisible && (hovered || pet.dataset.attention === 'true')))
   pet.style.setProperty('--pet-scale', String(snapshot.scale))
-  pet.setAttribute('aria-label', `${snapshot.pet.displayName}${currentLabel()}，可拖动`)
+  pet.setAttribute('aria-label', activityVisible
+    ? `${snapshot.pet.displayName}，${displayedSignal.context ?? '当前会话'}，${displayedSignal.label}，可拖动或点击任务卡打开会话`
+    : `${snapshot.pet.displayName}${currentLabel()}，可拖动`)
+  if (activityVisible) pet.setAttribute('aria-expanded', String(activityExpanded))
+  else pet.removeAttribute('aria-expanded')
   pet.title = `${snapshot.pet.displayName} · ${currentLabel()}`
   status.textContent = currentLabel()
+  activityContext.textContent = displayedSignal.context ?? '当前会话'
+  activityContext.title = displayedSignal.context ?? '当前会话'
+  activityLabel.textContent = displayedSignal.label
   renderFrame(performance.now())
 }
 
@@ -239,7 +265,8 @@ function renderFrame(now: number): void {
 
 function syncStatusPlacement(): void {
   const desktopScreen = window.screen as Screen & { availTop: number }
-  const placement: PetStatusPlacement = !snapshot?.enabled || pet.dataset.statusVisible !== 'true'
+  const panelVisible = pet.dataset.statusVisible === 'true' || pet.dataset.activityVisible === 'true'
+  const placement: PetStatusPlacement = !snapshot?.enabled || !panelVisible
       ? 'hidden'
       : choosePetStatusPlacement(window.screenY, {
           y: desktopScreen.availTop,
@@ -295,8 +322,18 @@ function installStyles(): void {
     #status{position:absolute;left:50%;top:calc(100% + 5px);max-width:230px;overflow:hidden;padding:5px 10px;border:1px solid rgb(127 127 127 / 28%);border-radius:999px;background:rgb(250 250 250 / 91%);color:#4b5563;box-shadow:0 4px 14px rgb(0 0 0 / 13%);font:12px/1.2 "Segoe UI",system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translate(-50%,4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
     #pet[data-status-placement="above"] #status{top:auto;bottom:calc(100% + 5px);transform:translate(-50%,-4px)}
     #pet[data-status-visible="true"] #status{opacity:1;transform:translate(-50%,0)}
+    #activity-controls{position:absolute;left:50%;top:calc(100% + 8px);display:none;gap:7px;align-items:center;transform:translateX(-50%);pointer-events:auto}
+    #activity-pulse,#activity-toggle{width:27px;height:27px;border:1px solid rgb(127 127 127 / 23%);border-radius:50%;background:rgb(250 250 250 / 94%);color:#374151;box-shadow:0 3px 10px rgb(0 0 0 / 12%);display:flex;align-items:center;justify-content:center}
+    #activity-pulse{gap:2px}#activity-pulse>span{display:block;width:2px;border-radius:2px;background:currentColor}#activity-pulse>span:nth-child(1){height:6px}#activity-pulse>span:nth-child(2){height:11px}#activity-pulse>span:nth-child(3){height:8px}
+    #activity-toggle::before{content:"";width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(2px) rotate(-135deg);transition:transform .15s ease}
+    #pet[data-activity-expanded="false"] #activity-toggle::before{transform:translateY(-2px) rotate(45deg)}
+    #activity-card{position:absolute;left:50%;top:calc(100% + 43px);width:320px;min-height:57px;overflow:hidden;padding:10px 20px 9px;border:1px solid rgb(127 127 127 / 20%);border-radius:29px;background:rgb(250 250 250 / 94%);color:#374151;box-shadow:0 6px 18px rgb(0 0 0 / 14%);display:none;flex-direction:column;align-items:stretch;text-align:left;transform:translateX(-50%);pointer-events:auto}
+    #activity-context{display:block;overflow:hidden;font:600 13px/18px "Segoe UI",system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}#activity-label{display:block;color:#6b7280;font:12px/17px "Segoe UI",system-ui,sans-serif}
+    #pet[data-status-placement="above"] #activity-controls{top:auto;bottom:calc(100% + 8px)}#pet[data-status-placement="above"] #activity-card{top:auto;bottom:calc(100% + 43px)}
+    #pet[data-activity-visible="true"] #activity-controls,#pet[data-activity-visible="true"][data-activity-expanded="true"] #activity-card{display:flex}
+    #activity-toggle:hover,#activity-pulse:hover,#activity-card:hover{filter:brightness(.97)}
     @media(prefers-color-scheme:dark){#status{border-color:rgb(255 255 255 / 18%);background:rgb(32 35 40 / 91%);color:#d1d5db}}
-    @media(prefers-reduced-motion:reduce){#status{transition:none}}
+    @media(prefers-reduced-motion:reduce){#status,#activity-toggle::before{transition:none}}
   `
   document.head.appendChild(style)
 }

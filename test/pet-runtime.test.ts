@@ -21,8 +21,13 @@ describe('Codex-compatible pet activity', () => {
 
     expect(selectPetSessionSignal({
       current: 'current',
-      byId: { current: { running: true } }
-    }, true)).toMatchObject({ mode: 'running', sessionId: 'current' })
+      byId: { current: { cwd: 'C:\\work\\demo', displayTitle: 'Demo', running: true } }
+    }, true)).toMatchObject({
+      context: 'C:\\work\\demo',
+      label: '正在思考',
+      mode: 'running',
+      sessionId: 'current'
+    })
 
     expect(selectPetSessionSignal({
       current: 'current',

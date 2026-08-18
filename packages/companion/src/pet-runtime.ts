@@ -14,6 +14,7 @@ export type PetMode =
 
 export interface PetSessionEntry {
   completed?: boolean
+  cwd?: string
   displayTitle?: string
   pendingInteraction?: 'approval' | 'plan-review' | 'question'
   running?: boolean
@@ -27,6 +28,7 @@ export interface PetSessionSnapshot {
 }
 
 export interface PetSignal {
+  context?: string
   mode: 'idle' | 'failed' | 'waiting' | 'running' | 'review'
   key: string
   label: string
@@ -113,7 +115,13 @@ export function selectPetSessionSignal(state: PetSessionSnapshot, hasCurrentErro
     }
   }
   if (current?.running === true) {
-    return { mode: 'running', key: `running:${currentId}`, label: '正在工作', sessionId: currentId }
+    return {
+      mode: 'running',
+      key: `running:${currentId}`,
+      label: '正在思考',
+      context: current.cwd?.trim() || current.displayTitle?.trim(),
+      sessionId: currentId
+    }
   }
   if (hasCurrentError && currentId !== undefined) {
     return { mode: 'failed', key: `failed:${currentId}`, label: '任务遇到问题', sessionId: currentId }

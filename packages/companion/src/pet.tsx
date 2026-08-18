@@ -249,7 +249,7 @@ export function PetOverlaySync({
   useSessions: PetUseSessions
 }): null {
   const signal = useSessions((state) => selectPetSessionSignal(state, hasCurrentError))
-  const { key, label, mode, sessionId } = signal
+  const { context, key, label, mode, sessionId } = signal
 
   useEffect(() => {
     getPetOverlay()?.sync({
@@ -262,9 +262,9 @@ export function PetOverlaySync({
         spritesheetDataUrl: controller.selectedPet.spritesheetDataUrl
       },
       scale: controller.settings.scale,
-      signal: { key, label, mode, sessionId }
+      signal: { context, key, label, mode, sessionId }
     })
-  }, [controller.selectedPet, controller.settings.animated, controller.settings.enabled, controller.settings.scale, key, label, mode, sessionId])
+  }, [context, controller.selectedPet, controller.settings.animated, controller.settings.enabled, controller.settings.scale, key, label, mode, sessionId])
 
   useEffect(() => getPetOverlay()?.onOpenSession(openSession), [openSession])
   return null

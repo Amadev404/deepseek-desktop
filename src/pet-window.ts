@@ -35,7 +35,7 @@ import {
 
 const DEFAULT_SCALE = 1.15
 const MAX_SPRITESHEET_DATA_URL_LENGTH = 20 * 1024 * 1024
-const PET_POSITION_LAYOUT_VERSION = 2
+const PET_POSITION_LAYOUT_VERSION = 3
 const LEGACY_PET_SPRITE_TOP = 26
 
 let petWindow: BrowserWindow | undefined
@@ -272,6 +272,7 @@ function validateSnapshot(value: unknown): DesktopPetSnapshot {
     || signal.key.length > 512
     || typeof signal.label !== 'string'
     || signal.label.length > 160
+    || (signal.context !== undefined && (typeof signal.context !== 'string' || signal.context.length > 1_024))
     || (signal.sessionId !== undefined && (typeof signal.sessionId !== 'string' || signal.sessionId.length > 256))) {
     throw new Error('Invalid DeepSeek pet snapshot.')
   }
