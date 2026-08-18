@@ -75,8 +75,10 @@ bridge.onSnapshot((value) => {
     }
     previousRawSignal = rawSignal
   }
-  render(true)
-  if (value.enabled) startAnimation()
+  // Session projections may emit equivalent snapshots while streaming; keep the active timeline running.
+  render(false)
+  if (value.enabled && value.animated && !reducedMotion.matches) startAnimation()
+  else stopAnimation()
 })
 
 pet.addEventListener('pointerdown', (event) => {
@@ -108,7 +110,10 @@ pet.addEventListener('pointermove', (event) => {
   if (dragFrame === 0) {
     dragFrame = window.requestAnimationFrame(() => {
       dragFrame = 0
-      if (pendingDragPoint) bridge.dragMove(pendingDragPoint.x, pendingDragPoint.y)
+      if (pendingDragPoint) {
+        bridge.dragMove(pendingDragPoint.x, pendingDragPoint.y)
+        syncStatusPlacement()
+      }
       pendingDragPoint = undefined
     })
   }
@@ -136,9 +141,12 @@ pet.addEventListener('click', () => {
   }
 })
 
-reducedMotion.addEventListener('change', () => render(true))
+reducedMotion.addEventListener('change', () => {
+  render(true)
+  if (reducedMotion.matches) stopAnimation()
+  else if (snapshot?.enabled && snapshot.animated) startAnimation()
+})
 bridge.ready()
-startAnimation()
 
 function finishDrag(event: PointerEvent, persist: boolean): void {
   if (!dragging) return
@@ -157,19 +165,25 @@ function finishDrag(event: PointerEvent, persist: boolean): void {
 }
 
 function startAnimation(): void {
-  if (animationFrame !== 0) return
+  if (animationFrame !== 0 || !snapshot?.enabled || !snapshot.animated || reducedMotion.matches) return
   const tick = (now: number): void => {
     animationFrame = 0
-    if (!snapshot?.enabled) return
+    if (!snapshot?.enabled || !snapshot.animated || reducedMotion.matches) return
     renderFrame(now)
     animationFrame = window.requestAnimationFrame(tick)
   }
   animationFrame = window.requestAnimationFrame(tick)
 }
 
+function stopAnimation(): void {
+  if (animationFrame === 0) return
+  window.cancelAnimationFrame(animationFrame)
+  animationFrame = 0
+}
+
 function render(resetAnimation: boolean): void {
   if (!snapshot) return
-  const nextKey = `${snapshot.pet.id}:${displayedSignal.key}:${hovered}:${dragDirection ?? ''}`
+  const nextKey = `${snapshot.pet.id}:${displayedSignal.key}:${hovered}:${dragDirection ?? ''}:${snapshot.animated}:${reducedMotion.matches}`
   if (resetAnimation || animationKey !== nextKey) {
     animationKey = nextKey
     animationStartedAt = performance.now()
