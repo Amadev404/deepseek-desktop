@@ -1,5 +1,7 @@
 # DeepSeek Desktop
 
+[中文](README.md) | [English](README.en.md)
+
 DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行官方
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI。
 
