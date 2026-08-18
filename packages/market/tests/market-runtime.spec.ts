@@ -1520,7 +1520,10 @@ describe('restricted HTTP boundary', () => {
   })
 
   it('allows proxy fake-IP DNS only for an exact reviewed hostname', async () => {
-    const lookupAddresses = vi.fn(async () => [{ address: '198.18.0.38', family: 4 as const }])
+    const lookupAddresses = vi.fn(async () => [
+      { address: '198.18.0.38', family: 4 as const },
+      { address: 'fdfe:dcba:9876::26', family: 6 as const },
+    ])
     const request = vi.fn(async () => ({
       body: Buffer.from('{"packages":[]}'),
       headers: { 'content-type': 'application/json' },
@@ -1549,6 +1552,10 @@ describe('restricted HTTP boundary', () => {
     )).rejects.toMatchObject({ code: 'blocked-address' })
     await expect(trusted.getJson(
       'https://198.18.0.38/api/v1/plugins',
+      new AbortController().signal,
+    )).rejects.toMatchObject({ code: 'blocked-address' })
+    await expect(trusted.getJson(
+      'https://[fdfe:dcba:9876::26]/api/v1/plugins',
       new AbortController().signal,
     )).rejects.toMatchObject({ code: 'blocked-address' })
   })

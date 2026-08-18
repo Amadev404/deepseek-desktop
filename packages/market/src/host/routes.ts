@@ -96,6 +96,7 @@ const dsh1024StoreHttpClient = createCachedCatalogHttpClient(
   createRestrictedHttpClient({
     syntheticProxyHostnames: [DSH_1024STORE_HOSTNAME],
     maxBodyBytes: MAX_DSH_1024STORE_BODY_BYTES,
+    totalTimeoutMs: 120_000,
   }),
 )
 

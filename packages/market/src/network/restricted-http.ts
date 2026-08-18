@@ -9,8 +9,10 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024
 const CONNECT_TIMEOUT_MS = 8_000
 const FIRST_BYTE_TIMEOUT_MS = 12_000
 const TOTAL_TIMEOUT_MS = 30_000
-const SYNTHETIC_PROXY_NETWORK = '198.18.0.0'
-const SYNTHETIC_PROXY_PREFIX = 15
+const SYNTHETIC_PROXY_IPV4_NETWORK = '198.18.0.0'
+const SYNTHETIC_PROXY_IPV4_PREFIX = 15
+const SYNTHETIC_PROXY_IPV6_NETWORK = 'fdfe:dcba:9876::'
+const SYNTHETIC_PROXY_IPV6_PREFIX = 48
 
 export class CatalogNetworkError extends Error {
   constructor(readonly code: 'invalid-url' | 'blocked-address' | 'redirect' | 'timeout' | 'http' | 'response') {
@@ -73,15 +75,16 @@ export interface RestrictedHttpClientOptions {
 }
 
 const syntheticProxyAddresses = new BlockList()
-syntheticProxyAddresses.addSubnet(SYNTHETIC_PROXY_NETWORK, SYNTHETIC_PROXY_PREFIX, 'ipv4')
+syntheticProxyAddresses.addSubnet(SYNTHETIC_PROXY_IPV4_NETWORK, SYNTHETIC_PROXY_IPV4_PREFIX, 'ipv4')
+syntheticProxyAddresses.addSubnet(SYNTHETIC_PROXY_IPV6_NETWORK, SYNTHETIC_PROXY_IPV6_PREFIX, 'ipv6')
 
 function assertSafeAddress(address: string, allowSyntheticProxyAddress = false): 4 | 6 {
   const normalized = address.replace(/^\[|\]$/gu, '').split('%', 1)[0]!
   const family = isIP(normalized)
   const addressFamily = family === 4 ? 'ipv4' : 'ipv6'
   const allowedSyntheticAddress = allowSyntheticProxyAddress
-    && family === 4
-    && syntheticProxyAddresses.check(normalized, 'ipv4')
+    && family !== 0
+    && syntheticProxyAddresses.check(normalized, addressFamily)
   if (family === 0 || blockedAddresses.check(normalized, addressFamily) && !allowedSyntheticAddress) {
     throw new CatalogNetworkError('blocked-address')
   }
