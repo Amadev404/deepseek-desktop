@@ -14,7 +14,6 @@ import defaultSpritesheet from '../assets/deepseek-pet.webp'
 import type { DesktopPetSnapshot } from '../../../src/pet-window-contract.js'
 import {
   clampPetPosition,
-  defaultPetFrameOffset,
   petFrameAt,
   petSpriteGeometry,
   petTimeline,
@@ -92,7 +91,7 @@ const DEFAULT_PET: PetRecord = {
   id: DEFAULT_PET_ID,
   displayName: '鲸鱼娘',
   description: 'DeepSeek 默认桌宠',
-  spriteVersionNumber: 3,
+  spriteVersionNumber: 1,
   spritesheetDataUrl: defaultSpritesheet
 }
 
@@ -405,12 +404,8 @@ export function PetOverlay({
     controller.selectedPet.id === DEFAULT_PET_ID
   )
   const looking = lookIndex !== undefined && mode === 'idle' && pointerLookEnabled
-  const calmFrameRow = controller.selectedPet.id === DEFAULT_PET_ID && frame.row === 0 ? 6 : frame.row
-  const row = looking ? 9 + Math.floor(lookIndex / 8) : calmFrameRow
+  const row = looking ? 9 + Math.floor(lookIndex / 8) : frame.row
   const column = looking ? lookIndex % 8 : frame.column
-  const frameOffset = controller.selectedPet.id === DEFAULT_PET_ID && !looking
-    ? defaultPetFrameOffset(row, column)
-    : { x: 0, y: 0 }
   const attention = baseSignal.mode === 'failed' || baseSignal.mode === 'review' || baseSignal.mode === 'waiting'
   const label = drag !== undefined
     ? '正在移动'
@@ -434,8 +429,8 @@ export function PetOverlay({
     '--dsd-pet-atlas-height': `${geometry.atlasHeight * scale}px`,
     '--dsd-pet-x': `${-(column * geometry.frameWidth * scale)}px`,
     '--dsd-pet-y': `${-(row * geometry.frameHeight * scale)}px`,
-    '--dsd-pet-offset-x': `${frameOffset.x * scale}px`,
-    '--dsd-pet-offset-y': `${frameOffset.y * scale}px`
+    '--dsd-pet-offset-x': '0px',
+    '--dsd-pet-offset-y': '0px'
   } as CSSProperties
 
   const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>): void => {
@@ -660,7 +655,7 @@ function petPreviewStyle(pet: PetRecord, width: number): CSSProperties {
   const scale = width / geometry.frameWidth
   return {
     backgroundImage: `url(${pet.spritesheetDataUrl})`,
-    backgroundPosition: pet.id === DEFAULT_PET_ID ? `0 ${-(6 * geometry.frameHeight * scale)}px` : '0 0',
+    backgroundPosition: '0 0',
     backgroundSize: `${geometry.atlasWidth * scale}px ${geometry.atlasHeight * scale}px`
   }
 }

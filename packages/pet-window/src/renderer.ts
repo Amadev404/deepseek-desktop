@@ -1,5 +1,4 @@
 import {
-  defaultPetRowOffset,
   petFrameAt,
   petTimeline,
   resolvePetDragDirection,
@@ -214,8 +213,7 @@ function renderFrame(now: number): void {
     && snapshot.pet.spriteVersionNumber === 2
     && mode === 'idle'
     && lookIndex !== undefined
-  const calmRow = snapshot.pet.id === DEFAULT_PET_ID && frame.row === 0 ? 6 : frame.row
-  const row = canLook ? 9 + Math.floor(lookIndex! / 8) : calmRow
+  const row = canLook ? 9 + Math.floor(lookIndex! / 8) : frame.row
   const column = canLook ? lookIndex! % 8 : frame.column
   const geometry = petSpriteGeometry(snapshot.pet.spriteVersionNumber)
   const stageSize = petStageSize(snapshot.pet.spriteVersionNumber, snapshot.scale)
@@ -223,11 +221,10 @@ function renderFrame(now: number): void {
   if (frameKey === lastFrameKey) return
   lastFrameKey = frameKey
   const scale = snapshot.scale
-  const rowOffset = snapshot.pet.id === DEFAULT_PET_ID && !canLook ? defaultPetRowOffset(row).x * scale : 0
   pet.dataset.frame = String(column)
   pet.dataset.row = String(row)
   pet.dataset.looking = String(canLook)
-  pet.style.setProperty('--pet-offset-x', `${rowOffset}px`)
+  pet.style.setProperty('--pet-offset-x', '0px')
   pet.style.setProperty('--pet-width', `${stageSize.width}px`)
   pet.style.setProperty('--pet-height', `${stageSize.height}px`)
   pet.style.setProperty('--pet-stage-padding', `${PET_STAGE_PADDING * scale}px`)

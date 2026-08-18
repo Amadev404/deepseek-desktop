@@ -30,7 +30,7 @@ try {
       id: 'smoke-custom-pet',
       displayName: 'Smoke Custom Pet',
       description: 'Smoke test custom pet',
-      spriteVersionNumber: 3,
+      spriteVersionNumber: 1,
       spritesheetPath: 'spritesheet.webp'
     }), 'utf8')
   }
@@ -110,7 +110,7 @@ try {
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 4, y: 4 })
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-mode') === 'idle'`, 5_000)
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.getAttribute('data-status-placement') === 'hidden'`, 5_000)
-    assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-row') === '6'`), 'built-in DeepSeek pet did not use the calm idle row')
+    assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-row') === '0'`), 'built-in DeepSeek pet did not use the standard idle row')
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...petCenter, button: 'left', buttons: 1, clickCount: 1 })
     await petCdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...petCenter, button: 'left', buttons: 0, clickCount: 1 })
     assert(await petCdp.evaluate(`document.querySelector('#pet')?.getAttribute('data-mode') === 'idle'`), 'click leaked a transient pet action')
