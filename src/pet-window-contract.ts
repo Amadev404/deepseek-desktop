@@ -1,3 +1,5 @@
+import type { PetSpriteVersion } from './pet-sprite.js'
+
 export const PET_SYNC_CHANNEL = 'deepseek-desktop:pet-sync'
 export const PET_RESET_CHANNEL = 'deepseek-desktop:pet-reset-position'
 export const PET_STATE_CHANNEL = 'deepseek-desktop:pet-window-state'
@@ -28,7 +30,7 @@ export interface DesktopPetSignal {
 export interface DesktopPetRecord {
   id: string
   displayName: string
-  spriteVersionNumber: 1 | 2
+  spriteVersionNumber: PetSpriteVersion
   spritesheetDataUrl: string
 }
 

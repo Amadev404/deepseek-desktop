@@ -88,7 +88,7 @@ export function registerPetWindowIpc(owner: () => WebContents | undefined): void
     const point = clampPetWindowPosition({
       x: cursor.x - drag.offsetX,
       y: cursor.y - drag.offsetY
-    }, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE)
+    }, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE, latestSnapshot?.pet.spriteVersionNumber ?? 2)
     petWindow.setPosition(point.x, point.y)
     updateWindowShape()
     savedPosition = point
@@ -187,8 +187,8 @@ function positionWindow(useDefault: boolean): void {
     ? ownerDisplay()
     : screen.getDisplayMatching({ x: current.x, y: current.y, width: PET_WINDOW_WIDTH, height: PET_WINDOW_HEIGHT })
   const point = useDefault || savedPosition === undefined
-    ? defaultPetWindowPosition(display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE)
-    : clampPetWindowPosition(current, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE)
+    ? defaultPetWindowPosition(display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE, latestSnapshot?.pet.spriteVersionNumber ?? 2)
+    : clampPetWindowPosition(current, display.workArea, latestSnapshot?.scale ?? DEFAULT_SCALE, latestSnapshot?.pet.spriteVersionNumber ?? 2)
   savedPosition = point
   petWindow.setPosition(point.x, point.y)
   updateWindowShape()
@@ -207,7 +207,7 @@ function repositionForDisplays(): void {
 function updateWindowShape(): void {
   if (!petWindow || petWindow.isDestroyed()) return
   // Reapplying after a cross-display move lets Electron rebuild the native region at the new DPI.
-  petWindow.setShape(petWindowShape(latestSnapshot?.scale ?? DEFAULT_SCALE, statusPlacement))
+  petWindow.setShape(petWindowShape(latestSnapshot?.scale ?? DEFAULT_SCALE, statusPlacement, latestSnapshot?.pet.spriteVersionNumber ?? 2))
 }
 
 function persistPosition(point: Point): void {
@@ -262,7 +262,7 @@ function validateSnapshot(value: unknown): DesktopPetSnapshot {
     || typeof pet.displayName !== 'string'
     || pet.displayName.length === 0
     || pet.displayName.length > 80
-    || (pet.spriteVersionNumber !== 1 && pet.spriteVersionNumber !== 2)
+    || (pet.spriteVersionNumber !== 1 && pet.spriteVersionNumber !== 2 && pet.spriteVersionNumber !== 3)
     || typeof pet.spritesheetDataUrl !== 'string'
     || pet.spritesheetDataUrl.length > MAX_SPRITESHEET_DATA_URL_LENGTH
     || !/^data:image\/(?:webp|png);base64,[A-Za-z0-9+/=]+$/.test(pet.spritesheetDataUrl)

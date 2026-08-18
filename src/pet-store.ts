@@ -1,6 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
+import type { PetSpriteVersion } from './pet-sprite.js'
 
 export const PET_LIST_CHANNEL = 'deepseek-desktop:pet-list'
 export const PET_SAVE_CHANNEL = 'deepseek-desktop:pet-save'
@@ -14,7 +15,7 @@ export interface StoredPetRecord {
   id: string
   displayName: string
   description: string
-  spriteVersionNumber: 1 | 2
+  spriteVersionNumber: PetSpriteVersion
   spritesheetDataUrl: string
 }
 
@@ -82,7 +83,7 @@ function isStoredPetRecord(value: unknown): value is StoredPetRecord {
     && record.displayName.length <= 80
     && typeof record.description === 'string'
     && record.description.length <= 160
-    && (record.spriteVersionNumber === 1 || record.spriteVersionNumber === 2)
+    && (record.spriteVersionNumber === 1 || record.spriteVersionNumber === 2 || record.spriteVersionNumber === 3)
     && typeof record.spritesheetDataUrl === 'string'
     && /^data:image\/(?:webp|png);base64,[A-Za-z0-9+/=]+$/.test(record.spritesheetDataUrl)
 }

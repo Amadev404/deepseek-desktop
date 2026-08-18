@@ -16,13 +16,11 @@ import {
   clampPetPosition,
   defaultPetFrameOffset,
   petFrameAt,
-  petAtlasRows,
+  petSpriteGeometry,
   petTimeline,
   resolvePetDragDirection,
   resolvePetLookIndex,
   selectPetSessionSignal,
-  PET_FRAME_HEIGHT,
-  PET_FRAME_WIDTH,
   type PetFrameStep,
   type PetMode,
   type PetPoint,
@@ -30,6 +28,7 @@ import {
   type PetSignal,
   type PetSpriteVersion
 } from './pet-runtime.js'
+import { PET_STAGE_PADDING, petStageSize } from '../../../src/pet-sprite.js'
 
 const PET_SETTINGS_COOKIE = 'deepseek_desktop_pet_settings'
 const PET_COOKIE_MAX_AGE = 31_536_000
@@ -93,14 +92,14 @@ const DEFAULT_PET: PetRecord = {
   id: DEFAULT_PET_ID,
   displayName: '鲸鱼娘',
   description: 'DeepSeek 默认桌宠',
-  spriteVersionNumber: 2,
+  spriteVersionNumber: 3,
   spritesheetDataUrl: defaultSpritesheet
 }
 
 const PET_CSS = `
- .dsd-pet{--dsd-pet-scale:1.15;position:fixed;z-index:110;bottom:94px;width:calc(192px * var(--dsd-pet-scale));height:calc(208px * var(--dsd-pet-scale));padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 8px 12px rgb(0 0 0 / 22%));outline:none;touch-action:none;user-select:none;will-change:left,top;contain:layout}
+ .dsd-pet{--dsd-pet-scale:1.15;--dsd-pet-stage-width:276px;--dsd-pet-stage-height:294px;position:fixed;z-index:110;bottom:94px;width:var(--dsd-pet-stage-width);height:var(--dsd-pet-stage-height);padding:0;border:0;background:transparent;cursor:grab;filter:drop-shadow(0 8px 12px rgb(0 0 0 / 22%));outline:none;touch-action:none;user-select:none;will-change:left,top;contain:layout}
 .dsd-pet[data-anchor='left']{left:18px}.dsd-pet[data-anchor='right']{right:clamp(18px,34vw,460px)}.dsd-pet[data-dragging='true']{cursor:grabbing;z-index:111}
- .dsd-petSprite{position:absolute;inset:0 auto auto 0;display:block;width:var(--dsd-pet-frame-width);height:var(--dsd-pet-frame-height);background-repeat:no-repeat;background-size:var(--dsd-pet-atlas-width) var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);transform:translate(var(--dsd-pet-offset-x,0),var(--dsd-pet-offset-y,0));image-rendering:auto;will-change:background-position,transform}
+ .dsd-petSprite{position:absolute;left:var(--dsd-pet-stage-padding);top:var(--dsd-pet-stage-padding);display:block;width:var(--dsd-pet-frame-width);height:var(--dsd-pet-frame-height);background-repeat:no-repeat;background-size:var(--dsd-pet-atlas-width) var(--dsd-pet-atlas-height);background-position:var(--dsd-pet-x) var(--dsd-pet-y);transform:translate(var(--dsd-pet-offset-x,0),var(--dsd-pet-offset-y,0));image-rendering:auto;will-change:background-position,transform}
 .dsd-petStatus{position:absolute;right:4px;bottom:-27px;max-width:210px;overflow:hidden;padding:5px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:999px;color:var(--dsw-alias-label-secondary);background:color-mix(in srgb,var(--dsw-alias-bg-base) 91%,transparent);box-shadow:var(--dsw-shadow-lv1);font:12px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap;opacity:0;transform:translateY(4px);transition:opacity .15s ease,transform .15s ease;pointer-events:none}
 .dsd-pet:hover .dsd-petStatus,.dsd-pet:focus-visible .dsd-petStatus,.dsd-pet[data-attention='true'] .dsd-petStatus{opacity:1;transform:none}.dsd-pet:focus-visible{outline:2px solid var(--dsw-alias-border-l3);outline-offset:4px}
 .dsd-petSectionTitle{justify-content:space-between}.dsd-petToggle{display:flex;align-items:center;gap:7px;color:var(--dsw-alias-label-primary);font-size:12px;font-weight:400;cursor:pointer}.dsd-petToggle input{margin:0;accent-color:var(--dsw-alias-state-business-primary)}
@@ -391,7 +390,8 @@ export function PetOverlay({
   }, [baseSignal.mode, controller.settings.animated, drag, hovered, pointerLookEnabled])
 
   const scale = controller.settings.scale
-  const petSize = { width: PET_FRAME_WIDTH * scale, height: PET_FRAME_HEIGHT * scale }
+  const geometry = petSpriteGeometry(controller.selectedPet.spriteVersionNumber)
+  const petSize = petStageSize(controller.selectedPet.spriteVersionNumber, scale)
   const savedPosition = controller.settings.x === undefined || controller.settings.y === undefined
     ? undefined
     : clampPetPosition({ x: controller.settings.x, y: controller.settings.y }, petSize, viewport)
@@ -419,18 +419,21 @@ export function PetOverlay({
       : baseSignal.label
   const style = {
     '--dsd-pet-scale': String(scale),
+    '--dsd-pet-stage-width': `${petSize.width}px`,
+    '--dsd-pet-stage-height': `${petSize.height}px`,
     ...(savedPosition === undefined
       ? {}
       : { left: `${savedPosition.x}px`, top: `${savedPosition.y}px`, right: 'auto', bottom: 'auto' })
   } as unknown as CSSProperties
   const spriteStyle = {
     backgroundImage: `url(${controller.selectedPet.spritesheetDataUrl})`,
-    '--dsd-pet-frame-width': `${PET_FRAME_WIDTH * scale}px`,
-    '--dsd-pet-frame-height': `${PET_FRAME_HEIGHT * scale}px`,
-    '--dsd-pet-atlas-width': `${1536 * scale}px`,
-    '--dsd-pet-atlas-height': `${petAtlasRows(controller.selectedPet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`,
-    '--dsd-pet-x': `${-(column * PET_FRAME_WIDTH * scale)}px`,
-    '--dsd-pet-y': `${-(row * PET_FRAME_HEIGHT * scale)}px`,
+    '--dsd-pet-stage-padding': `${PET_STAGE_PADDING * scale}px`,
+    '--dsd-pet-frame-width': `${geometry.frameWidth * scale}px`,
+    '--dsd-pet-frame-height': `${geometry.frameHeight * scale}px`,
+    '--dsd-pet-atlas-width': `${geometry.atlasWidth * scale}px`,
+    '--dsd-pet-atlas-height': `${geometry.atlasHeight * scale}px`,
+    '--dsd-pet-x': `${-(column * geometry.frameWidth * scale)}px`,
+    '--dsd-pet-y': `${-(row * geometry.frameHeight * scale)}px`,
     '--dsd-pet-offset-x': `${frameOffset.x * scale}px`,
     '--dsd-pet-offset-y': `${frameOffset.y * scale}px`
   } as CSSProperties
@@ -653,11 +656,12 @@ function usePetFrame(mode: PetMode, continuous: boolean, key: string, animated: 
 }
 
 function petPreviewStyle(pet: PetRecord, width: number): CSSProperties {
-  const scale = width / PET_FRAME_WIDTH
+  const geometry = petSpriteGeometry(pet.spriteVersionNumber)
+  const scale = width / geometry.frameWidth
   return {
     backgroundImage: `url(${pet.spritesheetDataUrl})`,
-    backgroundPosition: pet.id === DEFAULT_PET_ID ? `0 ${-(6 * PET_FRAME_HEIGHT * scale)}px` : '0 0',
-    backgroundSize: `${1536 * scale}px ${petAtlasRows(pet.spriteVersionNumber) * PET_FRAME_HEIGHT * scale}px`
+    backgroundPosition: pet.id === DEFAULT_PET_ID ? `0 ${-(6 * geometry.frameHeight * scale)}px` : '0 0',
+    backgroundSize: `${geometry.atlasWidth * scale}px ${geometry.atlasHeight * scale}px`
   }
 }
 
@@ -707,12 +711,12 @@ function parseManifest(text: string): PetManifest {
   const displayName = typeof value.displayName === 'string' ? value.displayName.trim() : ''
   if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(id) || id === DEFAULT_PET_ID) throw new Error('pet.json 的 id 无效或与内置宠物冲突')
   if (!displayName || displayName.length > 80) throw new Error('pet.json 的 displayName 无效')
-  if (value.spriteVersionNumber !== undefined && value.spriteVersionNumber !== 1 && value.spriteVersionNumber !== 2) throw new Error('只支持 Codex V1 或 V2 宠物图集')
+  if (value.spriteVersionNumber !== undefined && ![1, 2, 3].includes(value.spriteVersionNumber)) throw new Error('只支持 Codex V1、V2 或 padded V3 宠物图集')
   return {
     id,
     displayName,
     description: typeof value.description === 'string' ? value.description.slice(0, 160) : undefined,
-    spriteVersionNumber: value.spriteVersionNumber === 2 ? 2 : 1,
+    spriteVersionNumber: value.spriteVersionNumber === 3 ? 3 : value.spriteVersionNumber === 2 ? 2 : 1,
     spritesheetPath: typeof value.spritesheetPath === 'string' ? value.spritesheetPath : undefined
   }
 }
@@ -724,7 +728,7 @@ function isPetRecord(value: unknown): value is PetRecord {
     && record.id !== DEFAULT_PET_ID
     && typeof record.displayName === 'string'
     && record.displayName.length <= 80
-    && (record.spriteVersionNumber === 1 || record.spriteVersionNumber === 2)
+    && (record.spriteVersionNumber === 1 || record.spriteVersionNumber === 2 || record.spriteVersionNumber === 3)
     && typeof record.spritesheetDataUrl === 'string'
     && record.spritesheetDataUrl.startsWith('data:image/')
 }
@@ -742,10 +746,10 @@ function validateSpritesheet(dataUrl: string): Promise<PetSpriteVersion> {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.addEventListener('load', () => {
-      if (image.naturalWidth !== 1536) return reject(new Error('精灵图宽度必须为 1536 像素'))
-      if (image.naturalHeight === 1872) return resolve(1)
-      if (image.naturalHeight === 2288) return resolve(2)
-      reject(new Error('精灵图必须为 Codex V1 1536×1872 或 V2 1536×2288'))
+      if (image.naturalWidth === 1536 && image.naturalHeight === 1872) return resolve(1)
+      if (image.naturalWidth === 1536 && image.naturalHeight === 2288) return resolve(2)
+      if (image.naturalWidth === 2048 && image.naturalHeight === 2816) return resolve(3)
+      reject(new Error('精灵图必须为 Codex V1 1536×1872、V2 1536×2288 或 padded V3 2048×2816'))
     })
     image.addEventListener('error', () => reject(new Error('精灵图格式无法识别')))
     image.src = dataUrl

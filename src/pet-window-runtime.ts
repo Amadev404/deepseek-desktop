@@ -1,11 +1,10 @@
 import type { Rectangle } from 'electron'
 import type { PetStatusPlacement } from './pet-window-contract.js'
+import { PET_STAGE_PADDING, petSpriteGeometry, type PetSpriteVersion } from './pet-sprite.js'
 
-export const PET_WINDOW_WIDTH = 448
-export const PET_WINDOW_HEIGHT = 424
+export const PET_WINDOW_WIDTH = 512
+export const PET_WINDOW_HEIGHT = 544
 export const PET_SPRITE_TOP = 56
-export const PET_FRAME_WIDTH = 192
-export const PET_FRAME_HEIGHT = 208
 
 const EDGE_MARGIN = 10
 const MIN_ROW_OFFSET_X = -42
@@ -23,21 +22,21 @@ export interface Point {
 
 export type PetEnvelope = Rectangle
 
-export function petEnvelope(scale: number): PetEnvelope {
+export function petEnvelope(scale: number, version: PetSpriteVersion = 2): PetEnvelope {
   const value = clamp(scale, .7, 1.5)
-  const spriteWidth = PET_FRAME_WIDTH * value
-  const spriteHeight = PET_FRAME_HEIGHT * value
-  const centeredLeft = (PET_WINDOW_WIDTH - spriteWidth) / 2
+  const geometry = petSpriteGeometry(version)
+  const stageWidth = (geometry.frameWidth + PET_STAGE_PADDING * 2) * value
+  const centeredLeft = (PET_WINDOW_WIDTH - stageWidth) / 2
   return {
-    x: centeredLeft + MIN_ROW_OFFSET_X * value,
-    y: PET_SPRITE_TOP,
-    width: spriteWidth + (MAX_ROW_OFFSET_X - MIN_ROW_OFFSET_X) * value,
-    height: spriteHeight
+    x: centeredLeft + (PET_STAGE_PADDING + geometry.contentX + MIN_ROW_OFFSET_X) * value,
+    y: PET_SPRITE_TOP + (PET_STAGE_PADDING + geometry.contentY) * value,
+    width: geometry.contentWidth * value + (MAX_ROW_OFFSET_X - MIN_ROW_OFFSET_X) * value,
+    height: geometry.contentHeight * value
   }
 }
 
-export function clampPetWindowPosition(point: Point, workArea: Rectangle, scale: number): Point {
-  const envelope = petEnvelope(scale)
+export function clampPetWindowPosition(point: Point, workArea: Rectangle, scale: number, version: PetSpriteVersion = 2): Point {
+  const envelope = petEnvelope(scale, version)
   const minX = workArea.x + EDGE_MARGIN - envelope.x
   const maxX = workArea.x + workArea.width - EDGE_MARGIN - envelope.x - envelope.width
   const minY = workArea.y + EDGE_MARGIN - envelope.y
@@ -48,20 +47,21 @@ export function clampPetWindowPosition(point: Point, workArea: Rectangle, scale:
   }
 }
 
-export function defaultPetWindowPosition(workArea: Rectangle, scale: number): Point {
-  const envelope = petEnvelope(scale)
+export function defaultPetWindowPosition(workArea: Rectangle, scale: number, version: PetSpriteVersion = 2): Point {
+  const envelope = petEnvelope(scale, version)
   return clampPetWindowPosition({
     x: workArea.x + workArea.width - 24 - envelope.x - envelope.width,
     y: workArea.y + workArea.height - 18 - envelope.y - envelope.height
-  }, workArea, scale)
+  }, workArea, scale, version)
 }
 
 export function choosePetStatusPlacement(
   windowY: number,
   workArea: Pick<Rectangle, 'y' | 'height'>,
-  scale: number
+  scale: number,
+  version: PetSpriteVersion = 2
 ): Exclude<PetStatusPlacement, 'hidden'> {
-  const envelope = petEnvelope(scale)
+  const envelope = petEnvelope(scale, version)
   const topEdge = workArea.y + EDGE_MARGIN
   const bottomEdge = workArea.y + workArea.height - EDGE_MARGIN
   const aboveTop = windowY + PET_SPRITE_TOP - STATUS_VISUAL_EXTENT
@@ -71,12 +71,21 @@ export function choosePetStatusPlacement(
   return topEdge - aboveTop < belowBottom - bottomEdge ? 'above' : 'below'
 }
 
-export function petWindowShape(scale: number, statusPlacement: PetStatusPlacement = 'hidden'): Rectangle[] {
-  const envelope = petEnvelope(scale)
-  const spriteLeft = Math.max(0, Math.floor(envelope.x - SPRITE_SHAPE_PADDING))
-  const spriteTop = Math.max(0, Math.floor(envelope.y - SPRITE_SHAPE_PADDING))
-  const spriteRight = Math.min(PET_WINDOW_WIDTH, Math.ceil(envelope.x + envelope.width + SPRITE_SHAPE_PADDING))
-  const spriteBottom = Math.min(PET_WINDOW_HEIGHT, Math.ceil(envelope.y + envelope.height + SPRITE_SHAPE_PADDING))
+export function petWindowShape(
+  scale: number,
+  statusPlacement: PetStatusPlacement = 'hidden',
+  version: PetSpriteVersion = 2
+): Rectangle[] {
+  const value = clamp(scale, .7, 1.5)
+  const geometry = petSpriteGeometry(version)
+  const envelope = petEnvelope(value, version)
+  const stageWidth = (geometry.frameWidth + PET_STAGE_PADDING * 2) * value
+  const stageHeight = (geometry.frameHeight + PET_STAGE_PADDING * 2) * value
+  const stageLeft = (PET_WINDOW_WIDTH - stageWidth) / 2
+  const spriteLeft = Math.max(0, Math.floor(stageLeft + MIN_ROW_OFFSET_X * value - SPRITE_SHAPE_PADDING))
+  const spriteTop = Math.max(0, Math.floor(PET_SPRITE_TOP - SPRITE_SHAPE_PADDING))
+  const spriteRight = Math.min(PET_WINDOW_WIDTH, Math.ceil(stageLeft + stageWidth + MAX_ROW_OFFSET_X * value + SPRITE_SHAPE_PADDING))
+  const spriteBottom = Math.min(PET_WINDOW_HEIGHT, Math.ceil(PET_SPRITE_TOP + stageHeight + SPRITE_SHAPE_PADDING))
   const shape = [{
     x: spriteLeft,
     y: spriteTop,

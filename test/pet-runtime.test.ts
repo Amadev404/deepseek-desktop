@@ -4,6 +4,7 @@ import {
   defaultPetFrameOffset,
   petFrameAt,
   petAtlasRows,
+  petSpriteGeometry,
   petTimeline,
   primaryAnimationDuration,
   resolvePetDragDirection,
@@ -85,6 +86,17 @@ describe('Codex animation metrics', () => {
 })
 
 describe('pet geometry', () => {
+  it('uses a padded V3 atlas for the built-in desktop pet', () => {
+    expect(petSpriteGeometry(3)).toMatchObject({
+      frameWidth: 256,
+      frameHeight: 256,
+      atlasWidth: 2048,
+      atlasHeight: 2816,
+      contentX: 32,
+      contentY: 24
+    })
+  })
+
   it('supports both Codex atlas versions and v2 look directions', () => {
     expect(petAtlasRows(1)).toBe(9)
     expect(petAtlasRows(2)).toBe(11)

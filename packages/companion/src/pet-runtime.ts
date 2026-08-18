@@ -1,4 +1,6 @@
-export type PetSpriteVersion = 1 | 2
+import { petSpriteGeometry, type PetSpriteVersion } from '../../../src/pet-sprite.js'
+
+export { petSpriteGeometry, type PetSpriteVersion } from '../../../src/pet-sprite.js'
 export type PetMode =
   | 'idle'
   | 'running-right'
@@ -56,7 +58,6 @@ export type PetAnimationCadence = 'codex' | 'smooth'
 
 export const PET_FRAME_WIDTH = 192
 export const PET_FRAME_HEIGHT = 208
-export const PET_ATLAS_COLUMNS = 8
 
 const IDLE_STEPS = [1680, 660, 660, 840, 840, 1920].map((duration, column) => ({
   column,
@@ -163,7 +164,7 @@ export function primaryAnimationDuration(mode: Exclude<PetMode, 'idle'>): number
 }
 
 export function petAtlasRows(version: PetSpriteVersion): 9 | 11 {
-  return version === 2 ? 11 : 9
+  return petSpriteGeometry(version).atlasRows
 }
 
 export function resolvePetLookIndex(dx: number, dy: number, deadzone = 6): number | undefined {

@@ -30,7 +30,7 @@ try {
       id: 'smoke-custom-pet',
       displayName: 'Smoke Custom Pet',
       description: 'Smoke test custom pet',
-      spriteVersionNumber: 2,
+      spriteVersionNumber: 3,
       spritesheetPath: 'spritesheet.webp'
     }), 'utf8')
   }

@@ -20,6 +20,15 @@ describe('desktop pet window geometry', () => {
     expect(envelope.y + envelope.height).toBeLessThan(PET_WINDOW_HEIGHT)
   })
 
+  it('keeps the padded V3 action envelope inside the native region', () => {
+    const envelope = petEnvelope(1.5, 3)
+    const [sprite] = petWindowShape(1.5, 'hidden', 3)
+    expect(sprite.x).toBeLessThanOrEqual(envelope.x)
+    expect(sprite.y).toBeLessThanOrEqual(envelope.y)
+    expect(sprite.x + sprite.width).toBeGreaterThanOrEqual(envelope.x + envelope.width)
+    expect(sprite.y + sprite.height).toBeGreaterThanOrEqual(envelope.y + envelope.height)
+  })
+
   it('places the visible character near the lower-right work-area edge', () => {
     const point = defaultPetWindowPosition(workArea, 1.15)
     const envelope = petEnvelope(1.15)
