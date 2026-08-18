@@ -93,7 +93,7 @@ export async function startHarness(options: HarnessOptions): Promise<RunningHarn
   }).catch((error: unknown) => {
     stdout.close()
     stderr.close()
-    if (child.exitCode === null) child.kill('SIGTERM')
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
     throw error
   })
 
@@ -101,7 +101,7 @@ export async function startHarness(options: HarnessOptions): Promise<RunningHarn
 }
 
 function waitForExit(child: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<boolean> {
-  if (child.exitCode !== null) return Promise.resolve(true)
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true)
 
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
@@ -129,7 +129,7 @@ function killWindowsTree(pid: number): Promise<void> {
 
 export async function stopHarness(running: RunningHarness): Promise<void> {
   const { child } = running
-  if (child.exitCode !== null) return
+  if (child.exitCode !== null || child.signalCode !== null) return
 
   child.kill('SIGTERM')
   if (await waitForExit(child, 5_000)) return

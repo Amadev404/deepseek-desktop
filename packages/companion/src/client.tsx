@@ -53,6 +53,7 @@ type ModelState =
   | { phase: 'error'; value?: SessionModels; error: string }
 
 const BALANCE_PATH = '/deepseek-desktop/api/balance'
+const BALANCE_CACHE_MS = 5 * 60_000
 const EMPTY_SUBSCRIBE = (): (() => void) => () => {}
 const EMPTY_SNAPSHOT = (): undefined => undefined
 const CSS = `
@@ -140,21 +141,25 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
   const reasoning = useProjection<ReasoningUsageProjection>(sessions, currentId, 'desktopReasoningUsage')
   const [models, setModels] = useState<ModelState>({ phase: 'idle' })
   const modelGeneration = useRef(0)
+  const balanceCacheExpiresAt = useRef(0)
   const pet = usePetController()
 
   const loadBalance = useCallback(async (force = false) => {
-    if (!force && balance?.status === 'ready' && Date.now() - balance.fetchedAt < 5 * 60_000) return
+    if (!force && balanceCacheExpiresAt.current > Date.now()) return
     setBalanceLoading(true)
     try {
       const response = await fetch(`${BALANCE_PATH}${force ? '?refresh=1' : ''}`, { cache: 'no-store', credentials: 'same-origin' })
       if (!response.ok) throw new Error(String(response.status))
-      setBalance(await response.json() as BalanceResult)
+      const value = await response.json() as BalanceResult
+      balanceCacheExpiresAt.current = Date.now() + BALANCE_CACHE_MS
+      setBalance(value)
     } catch {
+      balanceCacheExpiresAt.current = Date.now() + BALANCE_CACHE_MS
       setBalance({ status: 'error', kind: 'network' })
     } finally {
       setBalanceLoading(false)
     }
-  }, [balance])
+  }, [])
 
   const loadModels = useCallback(async () => {
     const generation = ++modelGeneration.current
@@ -163,13 +168,18 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
       return
     }
     setModels((state) => ({ phase: 'loading', value: state.value }))
-    const response = await api.sessions.models({ sessionId: currentId })
-    if (generation !== modelGeneration.current) return
-    if (!response.result.ok) {
-      setModels({ phase: 'error', error: response.result.error.message })
-      return
+    try {
+      const response = await api.sessions.models({ sessionId: currentId })
+      if (generation !== modelGeneration.current) return
+      if (!response.result.ok) {
+        setModels({ phase: 'error', error: response.result.error.message })
+        return
+      }
+      setModels({ phase: 'ready', value: response.result.value })
+    } catch (error) {
+      if (generation !== modelGeneration.current) return
+      setModels({ phase: 'error', error: error instanceof Error ? error.message : String(error) })
     }
-    setModels({ phase: 'ready', value: response.result.value })
   }, [api, currentId, sessions])
 
   useEffect(() => {
@@ -208,21 +218,26 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
     if (!choice || choice.id === selectedEffort?.id || models.phase === 'selecting') return
     const generation = ++modelGeneration.current
     setModels({ phase: 'selecting', value: models.value })
-    const response = await api.sessions.selectModel({
-      sessionId: currentId,
-      provider: models.value.current.provider,
-      model: models.value.current.model,
-      reasoningEffort: choice.id
-    })
-    if (generation !== modelGeneration.current) return
-    if (!response.result.ok) {
-      setModels({ phase: 'error', value: models.value, error: response.result.error.message })
-      return
+    try {
+      const response = await api.sessions.selectModel({
+        sessionId: currentId,
+        provider: models.value.current.provider,
+        model: models.value.current.model,
+        reasoningEffort: choice.id
+      })
+      if (generation !== modelGeneration.current) return
+      if (!response.result.ok) {
+        setModels({ phase: 'error', value: models.value, error: response.result.error.message })
+        return
+      }
+      setModels({
+        phase: 'ready',
+        value: { ...models.value, current: response.result.value.selected }
+      })
+    } catch (error) {
+      if (generation !== modelGeneration.current) return
+      setModels({ phase: 'error', value: models.value, error: error instanceof Error ? error.message : String(error) })
     }
-    setModels({
-      phase: 'ready',
-      value: { ...models.value, current: response.result.value.selected }
-    })
   }
 
   const primaryBalance = balance?.status === 'ready' ? balance.balances[0] : undefined

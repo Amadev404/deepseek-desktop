@@ -45,6 +45,7 @@ let drag: { offsetX: number; offsetY: number } | undefined
 let getOwner: (() => WebContents | undefined) | undefined
 let writePosition = Promise.resolve()
 let statusPlacement: PetStatusPlacement = 'hidden'
+let allowClose = false
 
 export function registerPetWindowIpc(owner: () => WebContents | undefined): void {
   getOwner = owner
@@ -152,6 +153,12 @@ export async function openPetWindow(preloadPath: string, htmlPath: string): Prom
   window.webContents.on('will-attach-webview', (event) => event.preventDefault())
   window.webContents.session.setPermissionCheckHandler(() => false)
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
+  window.on('close', (event) => {
+    if (allowClose) return
+    event.preventDefault()
+    window.hide()
+  })
+  app.once('before-quit', () => { allowClose = true })
   window.on('closed', () => {
     if (petWindow === window) {
       petWindow = undefined
@@ -253,6 +260,7 @@ function validateSnapshot(value: unknown): DesktopPetSnapshot {
   if (typeof snapshot.enabled !== 'boolean'
     || typeof snapshot.animated !== 'boolean'
     || typeof snapshot.scale !== 'number'
+    || !Number.isFinite(snapshot.scale)
     || snapshot.scale < .7
     || snapshot.scale > 1.5
     || !pet
