@@ -3,6 +3,7 @@
 DeepSeek Desktop distributes the following principal third-party software:
 
 - [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), developed by DeepSeek AI and licensed under the MIT License.
+- [dsh-community-market](https://github.com/anywhere-labs/deepseek-harness-desktop), developed by Anywhere Labs and licensed under the MIT License. DeepSeek Desktop adapts its plugin catalog, verification, installation, receipt, recovery, and management implementation from upstream commit `697f768`; the preserved license is in `packages/market/LICENSE` and `licenses/MIT-anywhere-labs-deepseek-harness-desktop.txt`.
 - [Electron](https://github.com/electron/electron), licensed under the MIT License and other licenses documented by the Electron project.
 - [Node.js](https://github.com/nodejs/node), licensed under the MIT License and additional licenses documented by the Node.js project.
 

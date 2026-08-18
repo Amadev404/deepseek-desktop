@@ -16,6 +16,11 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - 关闭窗口时同时停止本地 Harness
 - 安装阶段静默预热官方 Harness 与 Web UI，提前完成首次初始化
 - 通过官方 `--patch` 扩展接口加入 Codex 风格账户上拉框，不修改官方源码
+- 内置适配自 Anywhere Labs `dsh-community-market` 的社区插件市场，可在设置或账户菜单中打开
+- 聚合 DSH 1024 Store 与 DSHFind 插件目录，保留来源、兼容性、版本和风险提示
+- 插件安装前核验 npm 元数据、仓库回链、运行时兼容性与生命周期脚本，并只安装精确版本
+- 通过官方 Harness `plugin --profile web` 命令安装和卸载插件，不直接改写 Harness Agent 或 Profile 清单
+- 保存安装收据并支持卸载、失败回滚、重启验证、异常启动自动恢复及一键打开 DSH 终端
 - 在 Harness 主机侧安全读取 DeepSeek API Key，并显示官方账户余额
 - 显示当前会话的输入、输出、缓存和推理 Token 统计
 - 使用官方 `session.models/selectModel` 接口提供三档思考强度滑块
@@ -41,13 +46,13 @@ DeepSeek Desktop 是一个面向 Windows x64 的轻量桌面壳，原样运行�
 - DeepSeek 宠物使用独立命名空间和 `%APPDATA%\DeepSeek Desktop\pets`，不读取或覆盖 Codex 宠物
 - 使用鲸鱼娘作为应用、安装包、快捷方式和账户菜单图标
 
-桌面壳不会复制、记录或管理 API Key，也不会修改官方 Harness 的 Agent 或 Profile 清单。
+桌面壳不会复制、记录或管理 API Key，也不会修改官方 Harness 的源码、Agent 或 Profile 清单。
 余额请求由随应用打包的 Harness Companion 插件在主机侧完成，Renderer 只能获得余额结果，
 无法读取原始 Key。桌面端仅向受信任的 Harness 页面暴露 `quit()` 和受限的宠物库桥接，
 宠物库只允许读写应用自己的目录。
 官方 Harness 在首次启动时会自行初始化缺失的 Web Profile，并维护
 `profiles/node_modules` 下的运行时 Junction。桌面端也只在该回退目录中维护自己的
-`@deepseek-desktop/companion` Junction；若同名位置是真实目录则拒绝覆盖并报错。
+`@deepseek-desktop/companion` 与 `@deepseek-desktop/market` Junction；若同名位置是真实目录则拒绝覆盖并报错。
 
 DeepSeek Desktop 的程序代码采用 MIT License。鲸鱼娘应用图标、账户头像和工作款立绘
 不包含在 MIT 授权中，单独按 CC BY-NC-SA 4.0 使用，仅限非商业用途，并要求署名及

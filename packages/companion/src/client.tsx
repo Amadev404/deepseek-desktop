@@ -313,6 +313,9 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
         </section>
 
         <div className="dsd-actions">
+          <button type="button" className="dsd-action" onClick={() => openPluginMarket(setOpen)}>
+            <Glyph kind="plugin" />插件市场
+          </button>
           <button type="button" className="dsd-action" onClick={() => openSettings(setOpen)}>
             <Glyph kind="settings" />设置
           </button>
@@ -456,6 +459,22 @@ function openSettings(setOpen: (open: boolean) => void): void {
   })
 }
 
+function openPluginMarket(setOpen: (open: boolean) => void): void {
+  openSettings(setOpen)
+  let attempts = 0
+  const select = (): void => {
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button')]
+    const market = buttons.find((button) => button.textContent?.trim() === '插件市场')
+    if (market) {
+      market.click()
+      return
+    }
+    buttons.find((button) => button.textContent?.trim() === '插件')?.click()
+    if (attempts++ < 20) setTimeout(select, 50)
+  }
+  setTimeout(select, 50)
+}
+
 function positionPopover(trigger: HTMLDivElement | null, wide: boolean): CSSProperties {
   const rect = trigger?.getBoundingClientRect()
   if (!rect) return { left: 12, bottom: 12, width: wide ? 260 : 300 }
@@ -476,10 +495,11 @@ function installStyles(): void {
   document.head.appendChild(style)
 }
 
-function Glyph({ kind, className }: { kind: 'chart' | 'chevron' | 'power' | 'refresh' | 'settings' | 'spark' | 'wallet'; className?: string }): ReactNode {
+function Glyph({ kind, className }: { kind: 'chart' | 'chevron' | 'plugin' | 'power' | 'refresh' | 'settings' | 'spark' | 'wallet'; className?: string }): ReactNode {
   const paths: Record<typeof kind, ReactNode> = {
     chart: <><path d="M4 18V9"/><path d="M10 18V5"/><path d="M16 18v-7"/></>,
     chevron: <path d="m5 8 5 5 5-5"/>,
+    plugin: <><path d="M7 3h6v4h4v6h-4v4H7v-4H3V7h4V3Z"/><path d="M7 7h6v6H7z"/></>,
     power: <><path d="M10 3v8"/><path d="M6.1 5.5a7 7 0 1 0 7.8 0"/></>,
     refresh: <><path d="M17 7V3l-1.8 1.8A7 7 0 1 0 17 12"/><path d="M17 3h-4"/></>,
     settings: <><circle cx="10" cy="10" r="2.4"/><path d="M16.2 11.7l1.2 1-.9 1.6-1.5-.5a6.7 6.7 0 0 1-1.4.8l-.3 1.6h-1.8l-.3-1.6a6.7 6.7 0 0 1-1.4-.8l-1.5.5-.9-1.6 1.2-1a6.8 6.8 0 0 1 0-1.6l-1.2-1 .9-1.6 1.5.5a6.7 6.7 0 0 1 1.4-.8l.3-1.6h1.8l.3 1.6a6.7 6.7 0 0 1 1.4.8l1.5-.5.9 1.6-1.2 1a6.8 6.8 0 0 1 0 1.6Z"/></>,

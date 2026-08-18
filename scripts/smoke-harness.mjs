@@ -14,6 +14,7 @@ const nodePath = join(root, 'node_modules', 'node', 'bin', 'node.exe')
 const cliPath = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 const patchPath = join(root, 'build', 'desktop.patch.yml')
 const companionPath = join(root, 'node_modules', '@deepseek-desktop', 'companion', 'lib', 'client.js')
+const marketPath = join(root, 'node_modules', '@deepseek-desktop', 'market', 'lib', 'client.js')
 const tempRoot = await mkdtemp(join(tmpdir(), 'deepseek-desktop-smoke-'))
 const dshHome = join(tempRoot, '.dsh')
 const launchRoot = join(tempRoot, 'launch-root')
@@ -24,11 +25,14 @@ try {
   await access(cliPath)
   await access(patchPath)
   await access(companionPath)
+  await access(marketPath)
   if (process.env.DEEPSEEK_DESKTOP_APP_ROOT) await verifyRuntimePeers(root)
   await mkdir(launchRoot, { recursive: true })
   const companionLink = join(dshHome, 'profiles', 'node_modules', '@deepseek-desktop', 'companion')
   await mkdir(dirname(companionLink), { recursive: true })
   await symlink(join(root, 'node_modules', '@deepseek-desktop', 'companion'), companionLink, process.platform === 'win32' ? 'junction' : 'dir')
+  const marketLink = join(dshHome, 'profiles', 'node_modules', '@deepseek-desktop', 'market')
+  await symlink(join(root, 'node_modules', '@deepseek-desktop', 'market'), marketLink, process.platform === 'win32' ? 'junction' : 'dir')
 
   const env = { ...process.env }
   delete env.ELECTRON_RUN_AS_NODE
@@ -40,6 +44,7 @@ try {
       || key.toLowerCase().startsWith('npm_')) delete env[key]
   }
   env.DSH_HOME = dshHome
+  env.DEEPSEEK_DESKTOP_USER_DATA = join(tempRoot, 'user-data')
   env.NO_COLOR = '1'
   env.Path = `${dirname(nodePath)}${delimiter}${env.Path ?? env.PATH ?? ''}`
 
@@ -62,11 +67,24 @@ try {
   if (!html.includes('@deepseek-desktop/companion')) {
     throw new Error('Harness boot manifest does not contain the Desktop Companion client.')
   }
+  if (!html.includes('@deepseek-desktop/market')) {
+    throw new Error('Harness boot manifest does not contain the Desktop Market client.')
+  }
 
   const companionResponse = await fetch(new URL('/plugins/@deepseek-desktop/companion/client.js', url), {
     signal: AbortSignal.timeout(5_000)
   })
   if (!companionResponse.ok) throw new Error(`Desktop Companion bundle returned HTTP ${companionResponse.status}.`)
+
+  const marketResponse = await fetch(new URL('/plugins/@deepseek-desktop/market/client.js', url), {
+    signal: AbortSignal.timeout(5_000)
+  })
+  if (!marketResponse.ok) throw new Error(`Desktop Market bundle returned HTTP ${marketResponse.status}.`)
+
+  const marketState = await fetch(new URL('/api/community-market/state', url), {
+    signal: AbortSignal.timeout(5_000)
+  })
+  if (!marketState.ok) throw new Error(`Desktop Market state returned HTTP ${marketState.status}.`)
 
   const balanceResponse = await fetch(new URL('/deepseek-desktop/api/balance', url), {
     signal: AbortSignal.timeout(5_000)

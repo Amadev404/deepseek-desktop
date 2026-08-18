@@ -3,8 +3,15 @@ import { mkdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
-import { ensureCompanionLink } from './companion-link.js'
+import { ensureCompanionLink, ensureDesktopPluginLink } from './companion-link.js'
 import { startHarness, stopHarness, type RunningHarness } from './harness.js'
+import {
+  clearPluginRecovery,
+  markPluginRecoveryVerifying,
+  readPluginRecovery,
+  restorePluginRecovery,
+  type PluginInstallRecoveryState
+} from './plugin-install-recovery.js'
 import { registerPetStoreIpc } from './pet-store.js'
 import { openPetWindow, registerPetWindowIpc } from './pet-window.js'
 import { chooseHarnessPort, isTrustedHarnessUrl } from './runtime.js'
@@ -15,6 +22,8 @@ const isPrewarm = process.argv.includes('--prewarm')
 let mainWindow: BrowserWindow | undefined
 let harness: RunningHarness | undefined
 let stopping = false
+let pluginRecoveryVerification: PluginInstallRecoveryState | undefined
+let dshHomePath = ''
 
 app.setName(PRODUCT_NAME)
 
@@ -55,6 +64,7 @@ async function startDesktop(): Promise<void> {
   const petPreloadPath = join(appPath, 'out', 'pet-preload.cjs')
   const petHtmlPath = join(appPath, 'out', 'pet.html')
   const companionDir = join(appPath, 'node_modules', '@deepseek-desktop', 'companion')
+  const marketDir = join(appPath, 'node_modules', '@deepseek-desktop', 'market')
   if (!existsSync(nodePath)) throw new Error(`Bundled Node.js runtime is missing:\n${nodePath}`)
   if (!existsSync(cliPath)) throw new Error(`Bundled DeepSeek Harness entry is missing:\n${cliPath}`)
   if (!existsSync(patchPath)) throw new Error(`DeepSeek Desktop Harness overlay is missing:\n${patchPath}`)
@@ -62,11 +72,16 @@ async function startDesktop(): Promise<void> {
   if (!isPrewarm && !existsSync(petPreloadPath)) throw new Error(`DeepSeek Desktop pet preload is missing:\n${petPreloadPath}`)
   if (!isPrewarm && !existsSync(petHtmlPath)) throw new Error(`DeepSeek Desktop pet page is missing:\n${petHtmlPath}`)
   if (!existsSync(companionDir)) throw new Error(`DeepSeek Desktop Companion is missing:\n${companionDir}`)
+  if (!existsSync(marketDir)) throw new Error(`DeepSeek Desktop Market is missing:\n${marketDir}`)
 
   const cwd = join(app.getPath('userData'), 'launch-root')
   const dshHome = process.env.DSH_HOME?.trim() || join(homedir(), '.dsh')
+  dshHomePath = dshHome
+  process.env.DEEPSEEK_DESKTOP_USER_DATA = app.getPath('userData')
   await mkdir(cwd, { recursive: true })
   await ensureCompanionLink(dshHome, companionDir)
+  await ensureDesktopPluginLink(dshHome, '@deepseek-desktop/market', marketDir)
+  if (!isPrewarm) await preparePluginRecovery(dshHome)
 
   harness = await startHarness({
     nodePath,
@@ -82,6 +97,22 @@ async function startDesktop(): Promise<void> {
   running.child.once('exit', (code, signal) => {
     if (stopping || harness !== running) return
     harness = undefined
+    if (code === 75) {
+      stopping = true
+      app.relaunch()
+      app.exit(0)
+      return
+    }
+    if (pluginRecoveryVerification) {
+      const recovery = pluginRecoveryVerification
+      pluginRecoveryVerification = undefined
+      stopping = true
+      void restorePluginRecovery(app.getPath('userData'), dshHomePath, recovery).finally(() => {
+        app.relaunch()
+        app.exit(0)
+      })
+      return
+    }
     if (isPrewarm) {
       app.quit()
       return
@@ -100,7 +131,23 @@ async function startDesktop(): Promise<void> {
     return
   }
   await openPetWindow(petPreloadPath, petHtmlPath)
+  if (pluginRecoveryVerification) {
+    pluginRecoveryVerification = undefined
+    await clearPluginRecovery(app.getPath('userData'))
+  }
   mainWindow.show()
+}
+
+async function preparePluginRecovery(dshHome: string): Promise<void> {
+  const userData = app.getPath('userData')
+  const recovery = await readPluginRecovery(userData)
+  if (!recovery || recovery.phase === 'rolled-back') return
+  if (recovery.phase === 'prepared' || recovery.phase === 'verifying') {
+    await restorePluginRecovery(userData, dshHome, recovery)
+    return
+  }
+  await markPluginRecoveryVerifying(userData, recovery)
+  pluginRecoveryVerification = { ...recovery, phase: 'verifying' }
 }
 
 function createWindow(harnessUrl: string, preloadPath: string): BrowserWindow {

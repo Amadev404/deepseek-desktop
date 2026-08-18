@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const companion = resolve(root, 'packages', 'companion')
 const companionOut = resolve(companion, 'lib')
+const market = resolve(root, 'packages', 'market')
+const marketOut = resolve(market, 'lib')
 
 await rm(companionOut, { recursive: true, force: true })
 await mkdir(companionOut, { recursive: true })
@@ -42,6 +44,39 @@ const body = client.outputFiles[0].text
 await writeFile(
   resolve(companionOut, 'client.js'),
   `window.__ModuleLoader__.load({\n  id: "@deepseek-desktop/companion",\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;\n${indent(body, 4)}\n    return module.exports;\n  }\n});\n`,
+  'utf8'
+)
+
+await rm(marketOut, { recursive: true, force: true })
+await mkdir(marketOut, { recursive: true })
+
+await build({
+  entryPoints: [resolve(market, 'src', 'index.ts')],
+  outfile: resolve(marketOut, 'index.js'),
+  bundle: true,
+  external: ['@deepseek-ai/*', 'ajv', 'ajv/*', 'ajv-formats', 'semver', 'sharp', 'yaml'],
+  format: 'esm',
+  platform: 'node',
+  target: 'node24',
+  sourcemap: false,
+  legalComments: 'none'
+})
+
+const marketClient = await build({
+  entryPoints: [resolve(market, 'src', 'client', 'index.ts')],
+  bundle: true,
+  external: ['react', 'react/*', 'react-dom', 'react-dom/*', '@deepseek-ai/*'],
+  format: 'cjs',
+  platform: 'browser',
+  target: 'chrome142',
+  write: false,
+  sourcemap: false,
+  legalComments: 'none'
+})
+
+await writeFile(
+  resolve(marketOut, 'client.js'),
+  `window.__ModuleLoader__.load({\n  id: "@deepseek-desktop/market",\n  factory: (require) => {\n    var module = { exports: {} };\n    var exports = module.exports;\n${indent(marketClient.outputFiles[0].text, 4)}\n    return module.exports;\n  }\n});\n`,
   'utf8'
 )
 
@@ -83,9 +118,13 @@ await build({
 await copyFile(resolve(root, 'src', 'pet.html'), resolve(root, 'out', 'pet.html'))
 
 const manifest = JSON.parse(await readFile(resolve(companion, 'package.json'), 'utf8'))
+const marketManifest = JSON.parse(await readFile(resolve(market, 'package.json'), 'utf8'))
 const desktopManifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'))
 if (manifest.version !== desktopManifest.version) {
   throw new Error(`Companion version ${manifest.version} must match DeepSeek Desktop ${desktopManifest.version}.`)
+}
+if (marketManifest.version !== desktopManifest.version) {
+  throw new Error(`Market version ${marketManifest.version} must match DeepSeek Desktop ${desktopManifest.version}.`)
 }
 
 function indent(value, spaces) {

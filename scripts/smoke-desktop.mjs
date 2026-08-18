@@ -307,6 +307,7 @@ try {
     }
     assert(state.slider, 'reasoning effort slider is missing')
     assert(state.actions.some((text) => text?.includes('设置')), 'settings action is missing')
+    assert(state.actions.some((text) => text?.includes('插件市场')), 'plugin market action is missing')
     assert(state.actions.some((text) => text?.includes('退出')), 'quit action is missing')
     assert(JSON.stringify(state.bridgeKeys) === JSON.stringify(['quit', 'petStore', 'petOverlay']), `unexpected preload bridge ${JSON.stringify(state.bridgeKeys)}`)
     assert(state.requireType === 'undefined' && state.processType === 'undefined', 'renderer exposes Node.js globals')
@@ -315,10 +316,15 @@ try {
       await captureScreenshot(cdp, variantPath(process.env.DEEPSEEK_DESKTOP_SMOKE_SCREENSHOT, 'menu'))
     }
 
-    await cdp.evaluate(`[...document.querySelectorAll('.dsd-action')].find((node) => node.textContent?.includes('设置'))?.click()`)
-    await delay(500)
-    const settingsOpen = await cdp.evaluate(`Boolean([...document.querySelectorAll('[role="dialog"]')].find((node) => node.textContent?.includes('设置')))`)
-    assert(settingsOpen, 'Desktop settings action did not open the Harness settings dialog')
+    await cdp.evaluate(`[...document.querySelectorAll('.dsd-action')].find((node) => node.textContent?.includes('插件市场'))?.click()`)
+    await waitForDom(cdp, '.dshMarketRoot', 10_000)
+    const marketState = await cdp.evaluate(`(async () => ({
+      visible: Boolean(document.querySelector('.dshMarketRoot')),
+      title: document.querySelector('.dshMarketHeaderTitle')?.textContent,
+      api: await fetch('/api/community-market/state').then((response) => response.json())
+    }))()`)
+    assert(marketState.visible && marketState.title?.includes('社区插件市场'), `plugin market did not open: ${JSON.stringify(marketState)}`)
+    assert(marketState.api?.desktopActions?.requestRestart === true, `plugin market desktop actions are unavailable: ${JSON.stringify(marketState)}`)
 
     if (realHome) {
       secondChild = spawn(executablePath, [`--user-data-dir=${electronUserData}`], { cwd: root, env, stdio: 'ignore', windowsHide: true })

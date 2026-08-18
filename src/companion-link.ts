@@ -2,8 +2,16 @@ import { lstat, mkdir, readlink, rmdir, symlink } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 
 export async function ensureCompanionLink(dshHome: string, companionDir: string): Promise<string> {
-  const link = join(dshHome, 'profiles', 'node_modules', '@deepseek-desktop', 'companion')
-  const target = resolve(companionDir)
+  return ensureDesktopPluginLink(dshHome, '@deepseek-desktop/companion', companionDir)
+}
+
+export async function ensureDesktopPluginLink(dshHome: string, packageName: string, packageDir: string): Promise<string> {
+  const parts = packageName.split('/')
+  if (parts.length !== 2 || parts.some((part) => !/^[@a-z0-9][a-z0-9._-]*$/u.test(part))) {
+    throw new Error(`Invalid DeepSeek Desktop plugin package name: ${packageName}`)
+  }
+  const link = join(dshHome, 'profiles', 'node_modules', ...parts)
+  const target = resolve(packageDir)
   await mkdir(dirname(link), { recursive: true })
 
   try {

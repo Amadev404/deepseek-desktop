@@ -1,6 +1,7 @@
 node_modules/
 out/
 packages/companion/lib/
+packages/market/lib/
 dist/
 *.log
 .DS_Store

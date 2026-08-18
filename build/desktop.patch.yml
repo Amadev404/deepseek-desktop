@@ -3,3 +3,5 @@
 - insert:
     - id: deepseek-desktop-companion
       name: '@deepseek-desktop/companion'
+    - id: deepseek-desktop-market
+      name: '@deepseek-desktop/market'
