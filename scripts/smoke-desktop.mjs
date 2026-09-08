@@ -221,6 +221,15 @@ try {
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...triggerCenter, button: 'left', clickCount: 1 })
     await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...triggerCenter, button: 'left', clickCount: 1 })
     await waitForDom(cdp, '.dsd-petSummary', 5_000)
+    const topUp = await cdp.evaluate(`(() => {
+      const link = document.querySelector('.dsd-topUp')
+      return link instanceof HTMLAnchorElement
+        ? { href: link.href, target: link.target, rel: link.rel, label: link.textContent }
+        : null
+    })()`)
+    assert(topUp?.href === 'https://platform.deepseek.com/top_up' && topUp.label === '充值', 'official top-up link is missing or incorrect')
+    assert(topUp.target === '_blank', 'top-up link would replace the Harness page')
+    assert(topUp.rel.split(/\s+/).includes('noopener') && topUp.rel.split(/\s+/).includes('noreferrer'), 'top-up link does not isolate the external page')
     assert(await cdp.evaluate(`!document.querySelector('.dsd-popover .dsd-petManage')`), 'account popover exposes advanced pet controls')
     await cdp.evaluate(`document.querySelector('.dsd-petToggle input')?.click()`)
     await waitForEvaluation(petCdp, `document.querySelector('#pet')?.hidden === true`, 5_000)

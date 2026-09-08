@@ -83,6 +83,8 @@ const CSS = `
 .dsd-refresh:hover,.dsd-refresh:focus-visible{background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsd-refresh:disabled{opacity:.45;cursor:default}
 .dsd-refresh svg{width:14px;height:14px}
+.dsd-topUp{display:inline-flex;align-items:center;height:26px;padding:0 8px;border-radius:7px;color:var(--dsw-alias-label-primary);text-decoration:none;white-space:nowrap}
+.dsd-topUp:hover,.dsd-topUp:focus-visible{background:var(--dsw-alias-interactive-bg-hover)}
 .dsd-spin{animation:dsd-spin .8s linear infinite}
 @keyframes dsd-spin{to{transform:rotate(360deg)}}
 .dsd-balance{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
@@ -292,6 +294,14 @@ function DesktopMenu({ api, sessions, useSessions, wide }: DesktopMenuProps): Re
             >
               <Glyph kind="refresh" className={balanceLoading ? 'dsd-spin' : ''} />
             </button>
+            <a
+              className="dsd-topUp"
+              href="https://platform.deepseek.com/top_up"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="充值（在浏览器打开 DeepSeek 官方充值页）"
+              title="请登录当前 API Key 所属的 DeepSeek 官方账号，充值不适用于第三方 API。"
+            >充值</a>
           </div>
           <BalanceView balance={balance} loading={balanceLoading} />
         </section>
